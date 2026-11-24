@@ -1,0 +1,68 @@
+"""Stage an editable client or server distribution. Use the same content paths on Web and native."""
+import argparse
+import json
+import shutil
+from pathlib import Path
+
+ROOT=Path(__file__).resolve().parents[1]
+GAME=Path("games/kalender2026")
+
+def copy(src,dst):
+    dst.parent.mkdir(parents=True,exist_ok=True)
+    shutil.copy2(src,dst)
+
+def package(build,out,web,fixture=None):
+    out.mkdir(parents=True,exist_ok=True)
+    bootstrap=[]
+    def stage(src,rel):
+        copy(src,out/rel)
+        bootstrap.append(rel.as_posix())
+    for folder in ("shaders","lua/eng","assets/shared/fonts"):
+        for f in sorted((ROOT/"engine"/folder).rglob("*")):
+            if f.is_file(): stage(f,f.relative_to(ROOT))
+    src=ROOT/GAME
+    for f in sorted(src.rglob("*")):
+        rel=f.relative_to(src)
+        if f.is_file() and rel.parts[0] not in ("tests","saves") and f.suffix!=".engb":
+            stage(f,GAME/rel)
+    if fixture:
+        for f in sorted(fixture.rglob("*")):
+            if f.is_file(): stage(f,GAME/f.relative_to(fixture))
+    catalog=json.loads((out/GAME/"missions/catalog.json").read_text())
+    groups={}
+    for mission in catalog["missions"]:
+        paths=[]
+        for item in mission.get("files",[]):
+            rel=Path(item)
+            if rel.is_absolute() or ".." in rel.parts or "\\" in item or not (out/GAME/rel).is_file():
+                raise ValueError(f"Invalid mission file {item!r}")
+            paths.append((GAME/rel).as_posix())
+        groups[str(mission["day"])]=paths
+    deferred={path for paths in groups.values() for path in paths}
+    required={(GAME/"missions/catalog.json").as_posix(),*((GAME/m["script"]).as_posix() for m in catalog["missions"])}
+    if deferred & required: raise ValueError("Catalog and entry scripts must be available at startup")
+    stage(ROOT/"server.json",Path("server.json"))
+    for name in ("LICENSE","CREDITS.md","README.md"):
+        if (ROOT/name).is_file(): copy(ROOT/name,out/name)
+    for folder in ("licenses","hosting"):
+        if (ROOT/folder).is_dir(): shutil.copytree(ROOT/folder,out/folder,dirs_exist_ok=True)
+    copy(ROOT/"engine/THIRD_PARTY_NOTICES.md",out/"licenses/ENGINE-NOTICES.md")
+    copy(ROOT/"engine/LICENSE",out/"licenses/engine-MIT.txt")
+    copy(ROOT/"third_party/bq_websocket/LICENSE",out/"licenses/bq-websocket.txt")
+    if web:
+        shutil.copytree(ROOT/"web",out,dirs_exist_ok=True)
+        for file in ("lantern.js","lantern.wasm"): copy(build/file,out/file)
+        entries=[(GAME/m["script"]).as_posix() for m in catalog["missions"]]
+        (out/"manifest.json").write_text(json.dumps({"files":sorted(set(bootstrap)-deferred-set(entries)),"entries":entries,"missions":groups},separators=(",",":")))
+        (out/".nojekyll").touch()
+    else:
+        exe=next((p for p in (build/"lantern",build/"lantern.exe",build/"Release/lantern.exe") if p.is_file()),None)
+        if exe is None: raise FileNotFoundError("lantern binary")
+        copy(exe,out/exe.name)
+        for dll in sorted(exe.parent.glob("*.dll")): copy(dll,out/dll.name)
+
+if __name__=="__main__":
+    p=argparse.ArgumentParser()
+    p.add_argument("--build",type=Path,required=True); p.add_argument("--out",type=Path,required=True)
+    p.add_argument("--web",action="store_true"); p.add_argument("--fixture",type=Path)
+    a=p.parse_args();package(a.build,a.out,a.web,a.fixture)

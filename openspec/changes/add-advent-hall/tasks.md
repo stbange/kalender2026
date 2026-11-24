@@ -46,5 +46,15 @@ The first playable milestone is an eight-player hall, its 24 portals and the sha
 
 ## Workflow follow-up
 
+- The hall snowplay extension has three additional implementation checks below.
+
+## 7. Playtest the shooter in the hall
+
+- [ ] 7.1 Implement five selectable snowball tools and verify the single, spread, rapid, bounce and splash behaviors using the normal shooting controls.
+- [ ] 7.2 Add five visibly distinct slow-moving visitors. Verify that their movement effect expires, never stacks into a freeze and never damages the player.
+- [ ] 7.3 Share arrival, practice and return waves across the room. Test that late join and duplicate returns cannot spawn extra waves and that the practice bell works with an empty mission catalog.
+
+## Workflow follow-up after release
+
 - Archive the hall change when the acceptance scenarios pass and the public multiplayer smoke test succeeds. The intended Pages address is `https://stbange.github.io/kalender2026/`.
 - Open the first real mission change from a chosen childhood-game pitch. Set its date, build one complete co-op objective, test late joins and returns, credit its assets and deliver its pack before its Warsaw opening time. Repeat for each subsequent day.

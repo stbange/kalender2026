@@ -19,6 +19,7 @@ Give a group of old gaming friends a place to meet in December and a reason to c
 - `festive-hall` covers first-person navigation, readable portals, the snowball range and the player controls.
 - `advent-missions` covers Warsaw unlocks, walkthrough entrances, co-op destinations, returns and personal progress.
 - `shared-rooms` covers the eight-player Linux-hosted room, shared state, late arrivals and reconnects.
+- `hall-snowplay` covers the five launchers, five harmless visitor types, arrival and return encounters, and the practice bell.
 - `game-distribution` covers editable packages, supported targets, licensing, quality gates and main-only publication.
 
 ### Modified Capabilities

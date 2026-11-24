@@ -1,0 +1,7 @@
+[submodule "engine"]
+	path = engine
+	url = https://github.com/stbange/engine.git
+	branch = main
+[submodule "third_party/bq_websocket"]
+	path = third_party/bq_websocket
+	url = https://github.com/bqqbarbhg/bq_websocket.git
