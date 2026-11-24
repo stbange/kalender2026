@@ -1,0 +1,136 @@
+name: Build, playtest and publish the hall
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: kalender-main
+  cancel-in-progress: true
+
+jobs:
+  linux-web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install host tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ninja-build lua5.1 xvfb libgl-dev libegl-dev libssl-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev
+          pip install gcovr==8.8 'websockets>=15,<18' playwright
+          python -m playwright install --with-deps chromium
+          npm install -g @fission-ai/openspec
+      - uses: libsdl-org/setup-sdl@v1
+        with:
+          version: 3.4.20
+      - name: Validate specs and test upstream engine
+        env:
+          OPENSPEC_TELEMETRY: '0'
+        run: |
+          openspec validate --all --strict
+          cmake -S engine -B engine-cov -G Ninja -DENG_ENABLE_COVERAGE=ON -DENG_USE_LUAJIT=OFF
+          cmake --build engine-cov -j4
+          xvfb-run -a ctest --test-dir engine-cov --output-on-failure
+          gcovr --root engine --filter "$PWD/engine/src/" --lcov engine-cov/c_coverage.info engine-cov
+          python engine/tests/check_coverage.py engine-cov
+      - name: Test first-party C and Lua, then real network play
+        run: |
+          cmake -S . -B build-cov -G Ninja -DHALL_COVERAGE=ON
+          cmake --build build-cov -j4
+          ctest --test-dir build-cov -R '^hall_units$' --output-on-failure
+          mkdir reports
+          gcovr --root . --filter "$PWD/src/" --filter "$PWD/server/" --fail-under-line 95 --txt reports/c-units.txt --print-summary build-cov
+          python tests/lua_coverage.py | tee reports/lua-units.txt
+          ctest --test-dir build-cov --output-on-failure
+          build-cov/lantern --root . --fixture tests/fixture --headless --doctor
+      - name: Package release Linux client and room
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j4 --target lantern
+          python tools/package.py --build build --out dist/linux
+          python tools/linux_libs.py dist/linux
+          (cd /tmp && "$GITHUB_WORKSPACE/dist/linux/lantern" --headless --doctor)
+          tar -C dist/linux -czf lantern-linux-x86_64.tar.gz .
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 4.0.15
+      - name: Compile and play the Web client
+        run: |
+          emcmake cmake -S . -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-web -j4
+          python tools/package.py --web --build build-web --out dist/web
+          python tests/browser_smoke.py --site dist/web --binary build/lantern
+          python tests/content_test.py --binary build/lantern --web-build build-web
+          tar -C dist/web -czf lantern-web.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-and-web
+          path: lantern-*.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            reports/
+            build-cov/Testing/Temporary/LastTest.log
+            engine-cov/Testing/Temporary/LastTest.log
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/web
+
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja mingw-w64-ucrt-x86_64-sdl3 mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-pip zip
+      - name: Build, play and package Windows
+        run: |
+          python -m pip install --break-system-packages 'websockets>=15,<18'
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j4
+          ctest --test-dir build --output-on-failure
+          python tools/package.py --build build --out dist/windows
+          ldd build/lantern.exe | awk '/\/ucrt64\/bin\// { print $3 }' | xargs -I '{}' cp -n '{}' dist/windows/
+          curl -fsS https://curl.se/ca/cacert.pem -o dist/windows/cacert.pem
+          location="$PWD/dist/windows"
+          (cd /tmp && "$location/lantern.exe" --headless --doctor)
+          cd dist/windows && zip -qr ../../lantern-windows-x86_64.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: lantern-windows-x86_64.zip
+
+  pages:
+    needs: [linux-web, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/deploy-pages@v4
+        id: deploy
