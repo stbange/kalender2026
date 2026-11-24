@@ -66,7 +66,7 @@ Give each day its own OpenSpec change. A pack registers one `MissionPacks[day]` 
 {"revision":"lantern-2","missions":[{"day":1,"title":"Example","script":"missions/day_01.lua","files":["missions/day_01/target.glb"]}]}
 ```
 
-Use `start(run)` for the shared instance, `act(run, player)` for authoritative interactions and `build(pocket, pedestal)` to populate the client scene after assets arrive. Returning true from `act` grants an ornament to players present in that instance. Each scene uses a walk-back threshold for exit. The server runs the same Lua rules. Add pack-specific logic and tests alongside its artwork and record credits for every file. The [automated fixture](tests/fixture/) demonstrates the hooks. Stage it explicitly with `--fixture tests/fixture` for development. Unlisted production days remain in preparation. Web archives fetch each pack's declared assets when a friend first approaches its ready doorway.
+Use `start(run)` for the shared instance, `act(run, player)` for authoritative interactions and `build(pocket, pedestal)` to populate the client scene after assets arrive. Optional `enter(run, player)` and `exit(run, player, returned)` hooks run once for each participant's transition. Returning true from `act` grants an ornament to players present in that instance. Each scene uses a walk-back threshold for exit. The server runs the same Lua rules. Put pack-specific unit tests in `tests/unit/*.lua` and record credits for every file. The [automated fixture](tests/fixture/) demonstrates the contract. Stage it explicitly with `--fixture tests/fixture` for development. Unlisted production days remain in preparation. Web archives fetch each pack's declared assets when a friend first approaches its ready doorway.
 
 ## Verify and publish
 

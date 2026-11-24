@@ -1,5 +1,6 @@
 #include "hall.h"
 #include <SDL3/SDL.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +13,10 @@ static const char *next_arg(int *i,int argc,char **argv)
 int hall_run(int argc,char **argv)
 {
     hall_options o={0};
+#if defined(SIGPIPE) && !defined(__EMSCRIPTEN__)
+    /* A departing friend may close a socket while the next snapshot is in flight. */
+    signal(SIGPIPE,SIG_IGN);
+#endif
     o.root=SDL_GetBasePath(); o.port=8787;
 #ifdef __EMSCRIPTEN__
     o.root="/"; o.save="/profile";

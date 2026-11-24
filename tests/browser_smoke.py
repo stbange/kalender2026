@@ -77,8 +77,14 @@ def run(site,binary):
             for key,name in [("2","Flurry Fan"),("3","Snow Spinner"),("4","Bankshot"),("5","Snow Rocket"),("1","Snowball Pistol")]:
                 page.keyboard.down(key);page.wait_for_timeout(180);page.keyboard.up(key)
                 expect_text(page,"#weaponName",name)
-            page.mouse.down();page.wait_for_timeout(500);page.mouse.up()
-            assert any(str(msg).startswith("F ") for msg in sent),sent[-10:]
+            page.mouse.move(400,250)
+            page.mouse.down()
+            try:
+                for _ in range(40):
+                    page.wait_for_timeout(100)
+                    if any(str(msg).startswith("F ") for msg in sent):break
+                assert any(str(msg).startswith("F ") for msg in sent),(sent[-10:],page.evaluate("hudText"))
+            finally:page.mouse.up()
             observer.send("F 1 1 -.1592 .00796 -.98722")
             snapshot(observer,lambda s:s["hits"]>=1)
             page.wait_for_function("Number(document.getElementById('bells').textContent)>0",timeout=20000)
@@ -103,7 +109,8 @@ def run(site,binary):
             touch=mobile.new_page();touch.on("pageerror",lambda err:errors.append(str(err)))
             open_game(touch,base+"?"+urlencode({"server":secure,"room":"browsers"}))
             touch.locator("#enter").tap()
-            expect_text(touch,"#connection","3/8")
+            expect_text(touch,"#connection","Live room")
+            snapshot(observer,lambda s:len(s["players"])>=2)
             assert touch.locator("#stick").is_visible() and touch.locator("#fire").is_visible()
             touch.locator('[data-weapon="4"]').tap();expect_text(touch,"#weaponName","Bankshot")
             cdp=mobile.new_cdp_session(touch)

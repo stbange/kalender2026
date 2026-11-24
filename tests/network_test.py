@@ -32,6 +32,9 @@ def service(binary, root, fixture=False):
             assert "listening" in proc.stdout.readline(), "room process failed to start"
             yield port
         finally:
+            status=proc.poll()
+            if status is not None:
+                raise AssertionError(f"Room process exited during play with status {status}")
             if os.name == "nt":
                 proc.terminate()
             else:
@@ -163,6 +166,8 @@ def public_room(binary, root):
                 snapshot(witness, lambda s:len(s["players"]) == 2, timeout=5)
                 assert "localhost" in names, "TLS server name missing"
                 assert proc.wait(timeout=15) == 0
+                witness.send("P 0 17 122")
+                snapshot(witness,lambda s:len(s["players"])==1 and s["players"][1]["yaw"]==122)
             finally:
                 if proc.poll() is None: proc.terminate(); proc.wait()
     print("Eight seats, ninth rejection, isolation, reconnect, shared bell and native TLS passed.")
@@ -171,13 +176,15 @@ def public_room(binary, root):
 def coop(binary, root):
     with service(binary, root, True) as port, contextlib.ExitStack() as stack:
         clients = []
-        for i in range(3):
+        for i in range(8):
             ws, answer = hello(f"ws://127.0.0.1:{port}", revision="lantern-1-fixture")
             stack.callback(ws.close)
             clients.append(ws)
             assert answer == f"WELCOME {i+1}"
-        a,b,watch = clients
-        assert snapshot(watch, lambda s:len(s["players"])==3)["days"] == 24
+        a,b,watch = clients[:3]
+        assert snapshot(watch, lambda s:len(s["players"])==8)["days"] == 24
+        a.send("F 1 1 -.1592 .00796 -.98722")
+        assert snapshot(watch,lambda s:s["hits"]==1)["wave"]==1
         walk([a,b],(0,17),(-23,17.5))
         a.send("ENTER 1")
         snapshot(watch, lambda s:s["players"][1]["space"]==1)

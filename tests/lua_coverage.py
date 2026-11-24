@@ -7,7 +7,8 @@ lua=shutil.which("lua5.1") or "lua"
 compiler=shutil.which("luac5.1") or "luac"
 with tempfile.TemporaryDirectory() as tmp:
     data=Path(tmp)/"lines"
-    subprocess.run([lua,"tests/unit.lua",str(data)],check=True)
+    other_tests=sorted((root/"tests/unit").glob("*.lua"))
+    subprocess.run([lua,"tests/unit.lua",str(data),*other_tests],check=True)
     hits={tuple(line.rsplit(" ",1)) for line in data.read_text().splitlines()}
 covered=total=0
 for path in sorted((root/"games/kalender2026").rglob("*.lua")):

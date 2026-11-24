@@ -1,4 +1,4 @@
-World={meshes={},mobs={},bells={},doors={},markers={},friends={},balls={},ornaments={},pockets={},prepared={},pedestals={}}
+World={meshes={},mobs={},bells={},doors={},markers={},friends={},balls={},ornaments={},pockets={},prepared={},pedestals={},entrances={}}
 local W=World
 local function mesh(name)
     if not W.meshes[name] then W.meshes[name]=eng.asset.load_mesh("assets/"..name..".glb") end
@@ -36,6 +36,7 @@ function W.build()
         if pack then
             local space=eng.scene.register_pocket("day_"..day); W.pockets[day]=space
             local src=eng.scene.spawn("Walk into day "..day); pos(src,x,1.45,z); rot(src,0,yaw,0)
+            W.entrances[day]=src
             local dst=eng.scene.spawn("Return from day "..day); eng.scene.set_pocket(dst,space); pos(dst,0,1.45,6.9)
             eng.portal.link(src,dst,2.65,2.85,1,true,true)
             local floor=object("Mission floor",W.box,0,-.2,0,space,{color={.23,.30,.33,1}}); scale(floor,16,.4,16)
@@ -67,6 +68,7 @@ local function doors(r,awards)
         local color=ready and {.35,.72,.55,1} or due and {.37,.23,.11,1} or {.065,.13,.16,1}
         eng.scene.set_mesh(e,W.box,{color=color,emissive=due and .3 or .02})
         pos(e,x-ix*.84,ready and -6 or 1.44,z-iz*.84)
+        if W.entrances[day] then pos(W.entrances[day],x,ready and 1.45 or -35,z) end
         local icon=W.markers[day]
         pos(icon,x-ix*.60,(ready and 3.75 or 1.8),z-iz*.60)
         scale(icon,due and 1.3 or 1,due and .65 or 1,1)

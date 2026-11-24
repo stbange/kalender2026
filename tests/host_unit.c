@@ -11,8 +11,10 @@
 
 static void key(SDL_Scancode scancode, SDL_Keymod modifier)
 {
-    SDL_Event event={0};
-    event.type=SDL_EVENT_KEY_DOWN;
+    SDL_Event event;
+    SDL_zero(event);
+    event.key.type=SDL_EVENT_KEY_DOWN;
+    event.key.repeat=false;
     event.key.scancode=scancode;
     event.key.mod=modifier;
     settings_event(NULL,&event);

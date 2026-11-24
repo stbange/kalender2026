@@ -3,7 +3,7 @@ local base="games/kalender2026/scripts/"
 local hits={}
 debug.sethook(function(_,line)
     local file=debug.getinfo(2,"S").source:sub(2)
-    if file:sub(1,#base)==base then
+    if file:match("^games/kalender2026/") then
         hits[file]=hits[file] or {};hits[file][line]=true
     end
 end,"l")
@@ -20,6 +20,9 @@ local x,z=H.move(0,0,0,0,0);assert(z==2.25)
 x,z=H.move(.2,.1,0,0,0);assert(math.abs(x*x+z*z-2.25^2)<.001)
 x,z=H.move(0,0,100,-100,1);assert(x==7.5 and z==-7.5)
 MissionPacks={};dofile("tests/fixture/missions/day_01.lua")
+local enters,exits=0,0
+MissionPacks[1].enter=function() enters=enters+1 end
+MissionPacks[1].exit=function() exits=exits+1 end
 local r=H.new(0);local p=H.join(r,1);local q=H.join(r,2);local spectator=H.join(r,3)
 assert(not H.enter(r,p,1,MissionPacks))
 p.x,p.z=H.door(1);q.x,q.z=p.x,p.z
@@ -33,6 +36,7 @@ q.z=0;assert(H.objective(r,q,MissionPacks) and r.instances[1].done)
 assert(p.awards==1 and q.awards==1 and spectator.awards==0 and not H.objective(r,q,MissionPacks))
 assert(H.back(r,p) and r.wave==2 and r.instances[1].members==1)
 assert(H.back(r,q) and r.wave==2 and not r.instances[1] and not H.back(r,q))
+assert(enters==2 and exits==2)
 assert(not H.practice(r))
 for _,m in pairs(r.mobs) do m.hp=0 end
 assert(H.practice(r) and r.wave==3)
@@ -135,6 +139,7 @@ host_receive(Net.snapshot(remote));update(.05);assert(not g.awaiting and host_dr
 host_receive("invalid");host_weapon(5);keys.fire=true;g.nextFire=0;update(.2);assert(host_drain():find("F "))
 host_receive("DISCONNECTED");assert(not g.online and g.space==0)
 host_receive("ERROR Room full");assert(host_hud():find("Room full"))
+for i=2,#arg do dofile(arg[i]) end
 local f=assert(io.open(arg[1],"w"))
 for path,seen in pairs(hits) do for line in pairs(seen) do f:write(path," ",line,"\n") end end
 f:close();print("Calendar, all five snowcasters, five visitors, rooms, missions, saves, controls and presentation passed.")

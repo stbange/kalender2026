@@ -72,6 +72,7 @@ end
 function H.leave_space(r,p,returned)
     local run = r.instances[p.space]
     if not run then return end
+    if run.pack.exit then run.pack.exit(run,p,returned) end
     if returned and not run.returned then H.wave(r); run.returned=true end
     run.members=run.members-1
     if run.members==0 then r.instances[p.space]=nil end
@@ -87,12 +88,13 @@ function H.enter(r,p,day,packs)
     local run=r.instances[day]
     if not run then
         r.next_run=r.next_run+1
-        run={id=r.next_run,members=0,progress=0,returned=false}
+        run={id=r.next_run,members=0,progress=0,returned=false,pack=packs[day]}
         r.instances[day]=run
         if packs[day].start then packs[day].start(run) end
     end
     run.members=run.members+1
     p.space,p.x,p.z,p.yaw,p.slow,p.notice=day,0,5,0,0,""
+    if run.pack.enter then run.pack.enter(run,p) end
     return true
 end
 function H.back(r,p)
