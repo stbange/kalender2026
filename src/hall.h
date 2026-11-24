@@ -1,7 +1,7 @@
 #ifndef HALL_H
 #define HALL_H
-#include <engine/engine.h>
 #include <bq_websocket_platform.h>
+#include <engine/engine.h>
 #include <stdint.h>
 #include <time.h>
 
@@ -11,7 +11,7 @@ typedef struct {
     unsigned port, frames;
     time_t fixture_clock;
 } hall_options;
-int hall_run(int argc,char **argv);
+int hall_run(int argc, char **argv);
 
 bool hall_eval(eng_runtime_t *rt, const char *code, char *result, size_t cap);
 bool hall_string(char *dst, size_t cap, const char *data, size_t size);

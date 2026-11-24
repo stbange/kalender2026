@@ -19,118 +19,176 @@ static struct {
     uint32_t clips[3];
     bqws_socket *ws;
     char hello[128];
-    bool headless,failed,xr;
+    char active_endpoint[384], active_room[33];
+    bool headless, failed, xr;
     time_t utc;
-    float look_x,look_y;
+    float look_x, look_y;
     hall_settings settings;
 } app;
-static const char *actions[]={"left","right","up","down","fire","interact","practice"};
-static bool held[7],pulse[7],injected[7];
+static const char *actions[] = {"left", "right", "up", "down", "fire", "interact", "practice"};
+static bool held[7], pulse[7], injected[7];
 
-WEB_EXPORT void hall_action(const char *name,int down)
+WEB_EXPORT void hall_action(const char *name, int down)
 {
-    for(size_t i=0;i<7;i++) if(!strcmp(name,actions[i])) {
-        if(down && !held[i]) pulse[i]=true;
-        held[i]=down!=0;
-    }
+    for (size_t i = 0; i < 7; i++)
+        if (!strcmp(name, actions[i])) {
+            if (down && !held[i])
+                pulse[i] = true;
+            held[i] = down != 0;
+        }
 }
-WEB_EXPORT void hall_look(float x,float y)
+WEB_EXPORT void hall_look(float x, float y)
 {
-    app.look_x+=x; app.look_y+=y;
+    app.look_x += x;
+    app.look_y += y;
 }
 WEB_EXPORT void hall_choose(int number)
 {
     char code[48];
-    if(number<0 || number>5) return;
-    if(number) snprintf(code,sizeof(code),"host_weapon(%d)",number);
-    else snprintf(code,sizeof(code),"host_weapon()");
-    hall_eval(app.rt,code,NULL,0);
+    if (number < 0 || number > 5)
+        return;
+    if (number)
+        snprintf(code, sizeof(code), "host_weapon(%d)", number);
+    else
+        snprintf(code, sizeof(code), "host_weapon()");
+    hall_eval(app.rt, code, NULL, 0);
 }
 WEB_EXPORT void hall_menu(int show)
 {
-    hall_eval(app.rt,show?"game.state.menu=true":"game.state.menu=false",NULL,0);
+    hall_eval(app.rt, show ? "game.state.menu=true" : "game.state.menu=false", NULL, 0);
 }
-WEB_EXPORT void hall_resize(int width,int height)
+WEB_EXPORT void hall_resize(int width, int height)
 {
-    eng_platform_set_size(eng_runtime_platform(app.rt),width,height);
+    eng_platform_set_size(eng_runtime_platform(app.rt), width, height);
 }
 WEB_EXPORT void hall_lock(int state)
 {
-    eng_platform_sync_mouse_lock(eng_runtime_platform(app.rt),state!=0);
+    eng_platform_sync_mouse_lock(eng_runtime_platform(app.rt), state != 0);
 }
-WEB_EXPORT int hall_connect(const char *endpoint,const char *room)
+static void disconnect_room(void)
 {
-    if(!hall_valid_address(endpoint,room)) return 0;
-    if(app.ws) {
-        bqws_free_socket(app.ws); app.ws=NULL;
-        hall_eval(app.rt,"host_receive('DISCONNECTED')",NULL,0);
+    if (!app.ws)
+        return;
+    if (bqws_get_state(app.ws) == BQWS_STATE_OPEN) {
+        bqws_send_text(app.ws, "BYE");
+        bqws_update(app.ws);
+        bqws_close(app.ws, BQWS_CLOSE_NORMAL, NULL, 0);
+        bqws_update(app.ws);
     }
-    if(!*endpoint) return 1;
+    bqws_free_socket(app.ws);
+    app.ws = NULL;
+}
+WEB_EXPORT int hall_connect(const char *endpoint, const char *room)
+{
+    if (!hall_valid_address(endpoint, room))
+        return 0;
+    if (app.ws) {
+        if (!bqws_is_closed(app.ws) && !strcmp(endpoint, app.active_endpoint) &&
+            !strcmp(room, app.active_room))
+            return 1;
+        disconnect_room();
+        hall_eval(app.rt, "host_receive('DISCONNECTED')", NULL, 0);
+    }
+    if (!*endpoint)
+        return 1;
     char version[64];
-    if(!hall_eval(app.rt,"return Hall.version",version,sizeof(version))) return 0;
-    snprintf(app.hello,sizeof(app.hello),"HELLO %s %s",version,room);
-    app.ws=bqws_pt_connect(endpoint,NULL,NULL,NULL);
-    if(app.ws) bqws_send_text(app.ws,app.hello);
-    else hall_eval(app.rt,"host_receive('DISCONNECTED')",NULL,0);
-    return app.ws!=NULL;
+    if (!hall_eval(app.rt, "return Hall.version", version, sizeof(version)))
+        return 0;
+    snprintf(app.hello, sizeof(app.hello), "HELLO %s %s", version, room);
+    snprintf(app.active_endpoint, sizeof(app.active_endpoint), "%s", endpoint);
+    snprintf(app.active_room, sizeof(app.active_room), "%s", room);
+    app.ws = bqws_pt_connect(endpoint, NULL, NULL, NULL);
+    if (app.ws)
+        bqws_send_text(app.ws, app.hello);
+    else
+        hall_eval(app.rt, "host_receive('DISCONNECTED')", NULL, 0);
+    return app.ws != NULL;
 }
 static void network(void)
 {
-    if(!app.ws) return;
+    if (!app.ws)
+        return;
     bqws_update(app.ws);
     bqws_msg *msg;
-    while((msg=bqws_recv(app.ws))) {
-        if(msg->type==BQWS_MSG_TEXT && msg->size<24000) {
-            char literal[35000],code[35100];
-            if(hall_string(literal,sizeof(literal),msg->data,msg->size)) {
-                snprintf(code,sizeof(code),"host_receive(%s)",literal);
-                hall_eval(app.rt,code,NULL,0);
+    bool rejected = false;
+    while ((msg = bqws_recv(app.ws))) {
+        if (msg->type == BQWS_MSG_TEXT && msg->size < 24000) {
+            char literal[35000], code[35100];
+            if (hall_string(literal, sizeof(literal), msg->data, msg->size)) {
+                snprintf(code, sizeof(code), "host_receive(%s)", literal);
+                hall_eval(app.rt, code, NULL, 0);
+                if (msg->size >= 6 && !memcmp(msg->data, "ERROR ", 6))
+                    rejected = true;
             }
         }
         bqws_free_msg(msg);
     }
-    char outgoing[3000];
-    if(hall_eval(app.rt,"return host_drain()",outgoing,sizeof(outgoing))) {
-        for(char *line=strtok(outgoing,"\n");line;line=strtok(NULL,"\n")) bqws_send_text(app.ws,line);
+    if (rejected) {
+        disconnect_room();
+        return;
     }
-    if(bqws_is_closed(app.ws)) {
-        bqws_free_socket(app.ws); app.ws=NULL;
-        hall_eval(app.rt,"host_receive('DISCONNECTED')",NULL,0);
+    char outgoing[3000];
+    if (hall_eval(app.rt, "return host_drain()", outgoing, sizeof(outgoing))) {
+        for (char *line = strtok(outgoing, "\n"); line; line = strtok(NULL, "\n"))
+            bqws_send_text(app.ws, line);
+    }
+    if (bqws_is_closed(app.ws)) {
+        bqws_free_socket(app.ws);
+        app.ws = NULL;
+        hall_eval(app.rt, "host_receive('DISCONNECTED')", NULL, 0);
     }
 }
 
 static void audio_frame(float dt)
 {
     char queue[128];
-    hall_eval(app.rt,"return host_sound()",queue,sizeof(queue));
-    for(char *s=strtok(queue," ");s;s=strtok(NULL," ")) {
-        int i=!strcmp(s,"throw")?0:(!strcmp(s,"bell")?1:2);
-        eng_voice_desc_t voice=eng_voice_default_desc(app.clips[i]);
-        eng_audio_play(app.audio,&voice);
+    hall_eval(app.rt, "return host_sound()", queue, sizeof(queue));
+    for (char *s = strtok(queue, " "); s; s = strtok(NULL, " ")) {
+        int i = !strcmp(s, "throw") ? 0 : (!strcmp(s, "bell") ? 1 : 2);
+        eng_voice_desc_t voice = eng_voice_default_desc(app.clips[i]);
+        eng_audio_play(app.audio, &voice);
     }
-    eng_audio_update(app.audio,eng_runtime_scene(app.rt),eng_runtime_portals(app.rt),dt);
+    eng_audio_update(app.audio, eng_runtime_scene(app.rt), eng_runtime_portals(app.rt), dt);
 }
 
 #ifndef __EMSCRIPTEN__
-static bool SDLCALL settings_event(void *unused,SDL_Event *event)
+static bool SDLCALL settings_event(void *unused, SDL_Event *event)
 {
     (void)unused;
-    hall_settings *s=&app.settings;
-    if(event->type==SDL_EVENT_KEY_DOWN && event->key.scancode==SDL_SCANCODE_F2 && !event->key.repeat) {
-        s->open=!s->open;
-        SDL_Window *window=SDL_GetKeyboardFocus();
-        if(window) { if(s->open) SDL_StartTextInput(window); else SDL_StopTextInput(window); }
-        eng_platform_set_mouse_lock(eng_runtime_platform(app.rt),!s->open);
-    } else if(s->open && event->type==SDL_EVENT_TEXT_INPUT) hall_settings_text(s,event->text.text);
-    else if(s->open && event->type==SDL_EVENT_KEY_DOWN) {
-        switch(event->key.scancode) {
-        case SDL_SCANCODE_TAB: s->field=!s->field; break;
-        case SDL_SCANCODE_BACKSPACE: hall_settings_erase(s); break;
-        case SDL_SCANCODE_V:
-            if(event->key.mod & SDL_KMOD_CTRL) { char *clip=SDL_GetClipboardText(); if(clip) hall_settings_text(s,clip); SDL_free(clip); }
+    hall_settings *s = &app.settings;
+    if (event->type == SDL_EVENT_KEY_DOWN && event->key.scancode == SDL_SCANCODE_F2 && !event->key.repeat) {
+        s->open = !s->open;
+        SDL_Window *window = SDL_GetKeyboardFocus();
+        if (window) {
+            if (s->open)
+                SDL_StartTextInput(window);
+            else
+                SDL_StopTextInput(window);
+        }
+        eng_platform_set_mouse_lock(eng_runtime_platform(app.rt), !s->open);
+    } else if (s->open && event->type == SDL_EVENT_TEXT_INPUT)
+        hall_settings_text(s, event->text.text);
+    else if (s->open && event->type == SDL_EVENT_KEY_DOWN) {
+        switch (event->key.scancode) {
+        case SDL_SCANCODE_TAB:
+            s->field = !s->field;
             break;
-        case SDL_SCANCODE_RETURN: s->submit=true; break;
-        default: break;
+        case SDL_SCANCODE_BACKSPACE:
+            hall_settings_erase(s);
+            break;
+        case SDL_SCANCODE_V:
+            if (event->key.mod & SDL_KMOD_CTRL) {
+                char *clip = SDL_GetClipboardText();
+                if (clip)
+                    hall_settings_text(s, clip);
+                SDL_free(clip);
+            }
+            break;
+        case SDL_SCANCODE_RETURN:
+            s->submit = true;
+            break;
+        default:
+            break;
         }
     }
     return true;
@@ -139,142 +197,187 @@ static bool SDLCALL settings_event(void *unused,SDL_Event *event)
 
 static void frame(void)
 {
-    eng_platform_t *plat=eng_runtime_platform(app.rt);
-    eng_input_t *input=eng_runtime_input(app.rt);
-    float dt=eng_platform_begin_frame(plat);
-    eng_input_begin_frame(input,dt);
-    eng_input_poll_sdl(input,plat);
+    eng_platform_t *plat = eng_runtime_platform(app.rt);
+    eng_input_t *input = eng_runtime_input(app.rt);
+    float dt = eng_platform_begin_frame(plat);
+    eng_input_begin_frame(input, dt);
+    eng_input_poll_sdl(input, plat);
 #ifndef __EMSCRIPTEN__
-    if(app.settings.submit) {
-        app.settings.submit=false;
-        if(hall_connect(app.settings.endpoint,app.settings.room)) {
-            hall_settings_save(&app.settings,app.rt); app.settings.open=false;
-            SDL_Window *window=SDL_GetKeyboardFocus(); if(window) SDL_StopTextInput(window);
-            eng_platform_set_mouse_lock(plat,true);
+    if (app.settings.submit) {
+        app.settings.submit = false;
+        if (hall_connect(app.settings.endpoint, app.settings.room)) {
+            hall_settings_save(&app.settings, app.rt);
+            app.settings.open = false;
+            SDL_Window *window = SDL_GetKeyboardFocus();
+            if (window)
+                SDL_StopTextInput(window);
+            eng_platform_set_mouse_lock(plat, true);
         }
     }
 #endif
-    for(size_t i=0;i<7;i++) {
-        bool on=held[i] || pulse[i];
-        if(on!=injected[i]) { eng_input_inject_action(input,actions[i],on); injected[i]=on; }
-        pulse[i]=false;
+    for (size_t i = 0; i < 7; i++) {
+        bool on = held[i] || pulse[i];
+        if (on != injected[i]) {
+            eng_input_inject_action(input, actions[i], on);
+            injected[i] = on;
+        }
+        pulse[i] = false;
     }
-    if(app.look_x || app.look_y) {
-        eng_input_inject_mouse_delta(input,app.look_x,app.look_y);
-        app.look_x=app.look_y=0;
+    if (app.look_x || app.look_y) {
+        eng_input_inject_mouse_delta(input, app.look_x, app.look_y);
+        app.look_x = app.look_y = 0;
     }
-    time_t now=time(NULL);
-    if(now!=app.utc) { app.utc=now; hall_utc(app.rt,now); }
+    time_t now = time(NULL);
+    if (now != app.utc) {
+        app.utc = now;
+        hall_utc(app.rt, now);
+    }
     network();
-    char error[512]={0};
-    if(!app.settings.open && !eng_runtime_step(app.rt,dt,error,sizeof(error))) {
-        fprintf(stderr,"Simulation: %s\n",error); app.failed=true; return;
+    char error[512] = {0};
+    if (!app.settings.open && !eng_runtime_step(app.rt, dt, error, sizeof(error))) {
+        fprintf(stderr, "Simulation: %s\n", error);
+        app.failed = true;
+        return;
     }
     audio_frame(dt);
-    int width,height,pw,ph;
-    eng_platform_get_size(plat,&width,&height);
-    eng_platform_get_pixel_size(plat,&pw,&ph);
-    if(!app.xr) eng_renderer_resize(eng_runtime_renderer(app.rt),pw,ph);
+    int width, height, pw, ph;
+    eng_platform_get_size(plat, &width, &height);
+    eng_platform_get_pixel_size(plat, &pw, &ph);
+    if (!app.xr)
+        eng_renderer_resize(eng_runtime_renderer(app.rt), pw, ph);
     else {
-        eng_camera_t *cam=eng_runtime_camera(app.rt);
-        eng_xr_sync_frame(eng_runtime_xr(app.rt),cam->pos,cam->rot,NULL);
+        eng_camera_t *cam = eng_runtime_camera(app.rt);
+        eng_xr_sync_frame(eng_runtime_xr(app.rt), cam->pos, cam->rot, NULL);
     }
-    if(!eng_runtime_render(app.rt,error,sizeof(error))) { fprintf(stderr,"Render: %s\n",error); app.failed=true; return; }
+    if (!eng_runtime_render(app.rt, error, sizeof(error))) {
+        fprintf(stderr, "Render: %s\n", error);
+        app.failed = true;
+        return;
+    }
 #ifdef __EMSCRIPTEN__
     char request[12];
-    if(hall_eval(app.rt,"return host_pack_request()",request,sizeof(request)) && atoi(request)>0)
-        EM_ASM({ Module.fetchHallPack($0); },atoi(request));
+    if (hall_eval(app.rt, "return host_pack_request()", request, sizeof(request)) && atoi(request) > 0)
+        EM_ASM({ Module.fetchHallPack($0); }, atoi(request));
     char info[500];
-    if(hall_eval(app.rt,"return host_hud()",info,sizeof(info))) {
-        EM_ASM({ if(Module.hallHUD) Module.hallHUD(UTF8ToString($0)); },info);
+    if (hall_eval(app.rt, "return host_hud()", info, sizeof(info))) {
+        EM_ASM(
+            {
+                if (Module.hallHUD)
+                    Module.hallHUD(UTF8ToString($0));
+            },
+            info);
     }
 #else
-    eng_ui_begin_frame(app.ui,width,height,0,0,false,0);
-    eng_ui_set_fb_size(app.ui,pw,ph);
-    for(size_t i=0;i<eng_runtime_hud_text_count(app.rt);i++) {
-        float x,y; const char *s=eng_runtime_hud_text_get(app.rt,i,&x,&y);
-        char name[24]; snprintf(name,sizeof(name),"status%u",(unsigned)i);
-        eng_ui_hud_label(app.ui,name,ENG_UI_TOP_LEFT,x,y,640,26,s);
+    eng_ui_begin_frame(app.ui, width, height, 0, 0, false, 0);
+    eng_ui_set_fb_size(app.ui, pw, ph);
+    for (size_t i = 0; i < eng_runtime_hud_text_count(app.rt); i++) {
+        float x, y;
+        const char *s = eng_runtime_hud_text_get(app.rt, i, &x, &y);
+        char name[24];
+        snprintf(name, sizeof(name), "status%u", (unsigned)i);
+        eng_ui_hud_label(app.ui, name, ENG_UI_TOP_LEFT, x, y, 640, 26, s);
     }
-    eng_ui_hud_label(app.ui,"aim",ENG_UI_CENTER,0,0,20,22,"+");
-    if(app.settings.open) {
-        char e[455],r[90];
-        snprintf(e,sizeof(e),"%c Service: %s",app.settings.field?' ':'>',app.settings.endpoint);
-        snprintf(r,sizeof(r),"%c Room: %s",app.settings.field?'>':' ',app.settings.room);
-        eng_ui_hud_label(app.ui,"edit",ENG_UI_CENTER,-260,-80,550,30,"Join friends    Tab: switch field   Enter: connect   F2: close");
-        eng_ui_hud_label(app.ui,"endpoint",ENG_UI_CENTER,-260,-44,550,30,e);
-        eng_ui_hud_label(app.ui,"room",ENG_UI_CENTER,-260,-10,550,30,r);
-    } else eng_ui_hud_label(app.ui,"controls",ENG_UI_BOTTOM_LEFT,12,12,850,26,"WASD move   Mouse fire   1-5 / Q snowcasters   R practice bell   F2 join friends");
+    eng_ui_hud_label(app.ui, "aim", ENG_UI_CENTER, 0, 0, 20, 22, "+");
+    if (app.settings.open) {
+        char e[455], r[90];
+        snprintf(e, sizeof(e), "%c Service: %s", app.settings.field ? ' ' : '>', app.settings.endpoint);
+        snprintf(r, sizeof(r), "%c Room: %s", app.settings.field ? '>' : ' ', app.settings.room);
+        eng_ui_hud_label(app.ui, "edit", ENG_UI_CENTER, -260, -80, 550, 30,
+                         "Join friends    Tab: switch field   Enter: connect   F2: close");
+        eng_ui_hud_label(app.ui, "endpoint", ENG_UI_CENTER, -260, -44, 550, 30, e);
+        eng_ui_hud_label(app.ui, "room", ENG_UI_CENTER, -260, -10, 550, 30, r);
+    } else
+        eng_ui_hud_label(app.ui, "controls", ENG_UI_BOTTOM_LEFT, 12, 12, 850, 26,
+                         "WASD move   Mouse fire   1-5 / Q snowcasters   R practice bell   F2 join friends");
     eng_ui_render(app.ui);
 #endif
-    if(!app.xr) eng_platform_swap(plat);
+    if (!app.xr)
+        eng_platform_swap(plat);
 }
 #ifdef __EMSCRIPTEN__
-static void flat_frame(void) { if(!app.xr && !app.failed) frame(); }
-#endif
-WEB_EXPORT void hall_pack_ready(int day,int ok)
+static void flat_frame(void)
 {
-    if(day<1 || day>24) return;
+    if (!app.xr && !app.failed)
+        frame();
+}
+#endif
+WEB_EXPORT void hall_pack_ready(int day, int ok)
+{
+    if (day < 1 || day > 24)
+        return;
     char code[64];
-    snprintf(code,sizeof(code),"host_pack_ready(%d,%s)",day,ok?"true":"false");
-    hall_eval(app.rt,code,NULL,0);
+    snprintf(code, sizeof(code), "host_pack_ready(%d,%s)", day, ok ? "true" : "false");
+    hall_eval(app.rt, code, NULL, 0);
 }
 WEB_EXPORT void hall_xr_end(void)
 {
-    app.xr=false; eng_xr_end_session(eng_runtime_xr(app.rt));
-    hall_eval(app.rt,"host_xr(false);HostMoveX=0;HostMoveZ=0",NULL,0);
-    hall_action("fire",0); hall_action("interact",0); hall_action("practice",0);
+    app.xr = false;
+    eng_xr_end_session(eng_runtime_xr(app.rt));
+    hall_eval(app.rt, "host_xr(false);HostMoveX=0;HostMoveZ=0", NULL, 0);
+    hall_action("fire", 0);
+    hall_action("interact", 0);
+    hall_action("practice", 0);
 }
-WEB_EXPORT void hall_xr_frame(int fbo,const float *mat,const int *vp,const float *aim)
+WEB_EXPORT void hall_xr_frame(int fbo, const float *mat, const int *vp, const float *aim)
 {
-    app.xr=true;
-    eng_xr_eye_t eyes[2]={0};
-    for(int i=0;i<2;i++) {
-        memcpy(eyes[i].view.m,mat+i*32,64);
-        memcpy(eyes[i].proj.m,mat+i*32+16,64);
-        memcpy(eyes[i].viewport,vp+i*4,4*sizeof(int));
+    app.xr = true;
+    eng_xr_eye_t eyes[2] = {0};
+    for (int i = 0; i < 2; i++) {
+        memcpy(eyes[i].view.m, mat + i * 32, 64);
+        memcpy(eyes[i].proj.m, mat + i * 32 + 16, 64);
+        memcpy(eyes[i].viewport, vp + i * 4, 4 * sizeof(int));
     }
-    eng_xr_submit_frame_state(eng_runtime_xr(app.rt),(uint32_t)fbo,NULL,eyes,NULL);
+    eng_xr_submit_frame_state(eng_runtime_xr(app.rt), (uint32_t)fbo, NULL, eyes, NULL);
     char code[512];
-    snprintf(code,sizeof(code),"host_xr(true,%f,%f,%f,%f,%f,%f,%f);"
-        "local a=math.rad(game.state.yaw+%f);HostMoveX=%f*math.cos(a)+%f*math.sin(a);"
-        "HostMoveZ=-%f*math.sin(a)+%f*math.cos(a)",
-        aim[0],aim[1]-1.55,aim[2],aim[3],aim[4],aim[5],aim[8],aim[9],aim[6],aim[7],aim[6],aim[7]);
-    hall_eval(app.rt,code,NULL,0); hall_action("fire",aim[10]>.5f);
-    if(!app.failed) frame();
-}
-int hall_client(eng_runtime_t *rt,const hall_options *opts)
-{
-    app.rt=rt; app.headless=opts->headless;
-    eng_input_t *input=eng_runtime_input(rt);
-    for(int i=0;i<5;i++) {
-        char action[8]; snprintf(action,sizeof(action),"tool%d",i+1);
-        eng_input_bind_key(input,action,(SDL_Scancode)(SDL_SCANCODE_1+i));
-    }
-    eng_input_bind_key(input,"cycle",SDL_SCANCODE_Q);
-    eng_input_bind_key(input,"practice",SDL_SCANCODE_R);
-    eng_xr_set_mode(eng_runtime_xr(rt),ENG_XR_FIRST_PERSON);
-    app.audio=eng_audio_create(opts->headless);
-    const char *files[]={"assets/throw.wav","assets/bell.wav","assets/poof.wav"};
-    for(int i=0;i<3;i++) app.clips[i]=eng_audio_load_vfs(app.audio,eng_runtime_vfs(rt),files[i]);
-    hall_settings_read(&app.settings,rt,opts);
-    if(*app.settings.endpoint) hall_connect(app.settings.endpoint,app.settings.room);
-#ifdef __EMSCRIPTEN__
-    hall_eval(rt,"HostWeb=true",NULL,0);
-    emscripten_set_main_loop(flat_frame,0,1);
-#else
-    app.ui=eng_ui_create();
-    SDL_AddEventWatch(settings_event,NULL);
-    unsigned frames=0;
-    while(!eng_platform_should_quit(eng_runtime_platform(rt)) && !app.failed) {
+    snprintf(code, sizeof(code),
+             "host_xr(true,%f,%f,%f,%f,%f,%f,%f);"
+             "local a=math.rad(game.state.yaw+%f);HostMoveX=%f*math.cos(a)+%f*math.sin(a);"
+             "HostMoveZ=-%f*math.sin(a)+%f*math.cos(a)",
+             aim[0], aim[1] - 1.55, aim[2], aim[3], aim[4], aim[5], aim[8], aim[9], aim[6], aim[7], aim[6],
+             aim[7]);
+    hall_eval(app.rt, code, NULL, 0);
+    hall_action("fire", aim[10] > .5f);
+    if (!app.failed)
         frame();
-        if(opts->frames && ++frames>=opts->frames) break;
-        if(opts->headless && opts->endpoint) SDL_Delay(16);
+}
+int hall_client(eng_runtime_t *rt, const hall_options *opts)
+{
+    app.rt = rt;
+    app.headless = opts->headless;
+    eng_input_t *input = eng_runtime_input(rt);
+    for (int i = 0; i < 5; i++) {
+        char action[8];
+        snprintf(action, sizeof(action), "tool%d", i + 1);
+        eng_input_bind_key(input, action, (SDL_Scancode)(SDL_SCANCODE_1 + i));
+    }
+    eng_input_bind_key(input, "cycle", SDL_SCANCODE_Q);
+    eng_input_bind_key(input, "practice", SDL_SCANCODE_R);
+    eng_xr_set_mode(eng_runtime_xr(rt), ENG_XR_FIRST_PERSON);
+    app.audio = eng_audio_create(opts->headless);
+    const char *files[] = {"assets/throw.wav", "assets/bell.wav", "assets/poof.wav"};
+    for (int i = 0; i < 3; i++)
+        app.clips[i] = eng_audio_load_vfs(app.audio, eng_runtime_vfs(rt), files[i]);
+    hall_settings_read(&app.settings, rt, opts);
+    if (*app.settings.endpoint)
+        hall_connect(app.settings.endpoint, app.settings.room);
+#ifdef __EMSCRIPTEN__
+    hall_eval(rt, "HostWeb=true", NULL, 0);
+    emscripten_set_main_loop(flat_frame, 0, 1);
+#else
+    app.ui = eng_ui_create();
+    SDL_AddEventWatch(settings_event, NULL);
+    unsigned frames = 0;
+    while (!eng_platform_should_quit(eng_runtime_platform(rt)) && !app.failed) {
+        frame();
+        if (opts->frames && ++frames >= opts->frames)
+            break;
+        if (opts->headless && opts->endpoint)
+            SDL_Delay(16);
     }
     eng_ui_destroy(app.ui);
-    SDL_RemoveEventWatch(settings_event,NULL);
+    SDL_RemoveEventWatch(settings_event, NULL);
 #endif
-    if(app.ws) { bqws_free_socket(app.ws); app.ws=NULL; }
+    disconnect_room();
     eng_audio_destroy(app.audio);
-    return app.failed?1:0;
+    return app.failed ? 1 : 0;
 }

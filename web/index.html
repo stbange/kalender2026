@@ -1,46 +1,125 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#112820"><title>The Lantern Hall · Kalender 2026</title>
-<link rel="stylesheet" href="hall.css">
-<link rel="icon" href="icons/pistol.png">
-</head><body data-mode="menu">
-<main>
-<canvas id="canvas" tabindex="0" aria-label="First-person view of the Christmas hall"></canvas>
-<div class="shade"></div>
-<header><div class="brand"><span class="star" aria-hidden="true">✦</span> KALENDER <b>2026</b></div>
-<nav><button id="vr" hidden>Enter VR</button><button id="menu" hidden>Menu <kbd>Esc</kbd></button></nav></header>
-<section id="welcome" class="panel">
-<div class="sprig" aria-hidden="true">✧ ━━━ ✧</div>
-<h1>The Lantern<br><em>Hall</em></h1>
-<p>Beyond the Christmas tree are twenty-four doors. Meet your friends inside, pick a snowcaster and give the bells a ring.</p>
-<div class="actions"><button id="enter" class="primary" disabled>Lighting the hall…</button><button id="join">Join friends</button></div>
-<div class="links"><button id="controls">Controls</button><span>·</span><button id="credits">Credits</button></div>
-<p id="loading" role="status">Loading the Christmas hall…</p>
-</section>
-<section id="hud" aria-label="Game status">
-<div class="readout"><span id="connection"></span><span><b id="days">0</b>/24 doors</span><span><b id="bells">0</b> bells</span><span><b id="visitors">5</b> visitors</span></div>
-<div id="crosshair" aria-hidden="true">+</div><div id="hint" role="status"></div>
-<div class="rack" aria-label="Choose snowcaster">
-<button data-weapon="1" aria-label="Snowball Pistol"><small>1</small><img src="icons/pistol.png" alt=""></button>
-<button data-weapon="2" aria-label="Flurry Fan"><small>2</small><img src="icons/fan.png" alt=""></button>
-<button data-weapon="3" aria-label="Snow Spinner"><small>3</small><img src="icons/spinner.png" alt=""></button>
-<button data-weapon="4" aria-label="Bankshot"><small>4</small><img src="icons/bank.png" alt=""></button>
-<button data-weapon="5" aria-label="Snow Rocket"><small>5</small><img src="icons/rocket.png" alt=""></button>
-</div><div id="weaponName"></div>
-<button id="practice" title="Ring the practice bell after clearing the hall">Ring bell <kbd>R</kbd></button></section>
-<div id="touch"><div id="stick"><i></i></div><button id="use">Use</button><button id="fire">Fire</button></div>
-<dialog id="dialog"><button id="close" aria-label="Close">×</button><div id="dialogContent"></div></dialog>
-</main>
-<template id="joinPanel"><h2>Join friends</h2><form id="roomForm">
-<label>Room service<input name="server" type="url" placeholder="wss://hall.example.org" required></label>
-<label>Room code<input name="room" value="friends" maxlength="32" pattern="[a-zA-Z0-9_-]+" required></label>
-<p>Use the same service and room code as your friends. Up to eight players can meet in a room.</p>
-<button class="primary">Enter room</button><button type="button" id="invite">Copy invitation</button><button type="button" id="solo">Play solo</button><output id="joinStatus"></output></form></template>
-<template id="controlPanel"><h2>Hall controls</h2><dl><dt>Walk and look</dt><dd>WASD or arrow keys and mouse. On touchscreens use the left stick and drag the right side to look.</dd>
-<dt>Throw and switch</dt><dd>Click or press Fire. Use 1–5, Q or the snowcaster rack to switch tools.</dd><dt>Practice and interact</dt><dd>R rings the practice bell after a cleared encounter. E interacts. Walk through a ready portal to enter.</dd>
-<dt>Quest 3</dt><dd>Left stick moves, right stick snap-turns, right trigger fires and right grip cycles tools. A interacts and B rings the bell.</dd></dl></template>
-<template id="creditPanel"><h2>Credits</h2><p>The Lantern Hall is built with Stephan Bange’s retro 3D engine. The original models, voxel decorations, sprites, snowcasters and sounds are licensed under CC BY 4.0. Game code uses MIT.</p><p><a href="CREDITS.md">Asset credits and licenses</a> · <a href="https://github.com/stbange/kalender2026">Source code</a></p></template>
-<script src="hall.js"></script><script src="xr.js"></script><script src="lantern.js"></script>
-</body></html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#112820" />
+    <title>The Lantern Hall · Kalender 2026</title>
+    <link rel="stylesheet" href="hall.css" />
+    <link rel="icon" href="icons/pistol.png" />
+  </head>
+  <body data-mode="menu">
+    <main>
+      <canvas id="canvas" tabindex="0" aria-label="First-person view of the Christmas hall"></canvas>
+      <div class="shade"></div>
+      <header>
+        <div class="brand"><span class="star" aria-hidden="true">✦</span> KALENDER <b>2026</b></div>
+        <nav>
+          <button id="vr" hidden>Enter VR</button><button id="menu" hidden>Menu <kbd>Esc</kbd></button>
+        </nav>
+      </header>
+      <section id="welcome" class="panel">
+        <div class="sprig" aria-hidden="true">✧ ━━━ ✧</div>
+        <h1>The Lantern<br /><em>Hall</em></h1>
+        <p>
+          Beyond the Christmas tree are twenty-four doors. Meet your friends inside, pick a snowcaster and
+          give the bells a ring.
+        </p>
+        <div class="actions">
+          <button id="enter" class="primary" disabled>Lighting the hall…</button
+          ><button id="join">Join friends</button>
+        </div>
+        <div class="links">
+          <button id="controls">Controls</button><span>·</span><button id="credits">Credits</button>
+        </div>
+        <p id="loading" role="status">Loading the Christmas hall…</p>
+      </section>
+      <section id="hud" aria-label="Game status">
+        <div class="readout">
+          <span id="connection"></span><span><b id="days">0</b>/24 doors</span
+          ><span><b id="bells">0</b> bells</span><span><b id="visitors">5</b> visitors</span>
+        </div>
+        <div id="crosshair" aria-hidden="true">+</div>
+        <div id="hint" role="status"></div>
+        <div class="rack" aria-label="Choose snowcaster">
+          <button data-weapon="1" aria-label="Snowball Pistol">
+            <small>1</small><img src="icons/pistol.png" alt="" />
+          </button>
+          <button data-weapon="2" aria-label="Flurry Fan">
+            <small>2</small><img src="icons/fan.png" alt="" />
+          </button>
+          <button data-weapon="3" aria-label="Snow Spinner">
+            <small>3</small><img src="icons/spinner.png" alt="" />
+          </button>
+          <button data-weapon="4" aria-label="Bankshot">
+            <small>4</small><img src="icons/bank.png" alt="" />
+          </button>
+          <button data-weapon="5" aria-label="Snow Rocket">
+            <small>5</small><img src="icons/rocket.png" alt="" />
+          </button>
+        </div>
+        <div id="weaponName"></div>
+        <button id="practice" title="Ring the practice bell after clearing the hall">
+          Ring bell <kbd>R</kbd>
+        </button>
+      </section>
+      <div id="touch">
+        <div id="stick"><i></i></div>
+        <button id="use">Use</button><button id="fire">Fire</button>
+      </div>
+      <output id="storageWarning" hidden></output>
+      <dialog id="dialog">
+        <button id="close" aria-label="Close">×</button>
+        <div id="dialogContent"></div>
+      </dialog>
+    </main>
+    <template id="joinPanel"
+      ><h2>Join friends</h2>
+      <form id="roomForm">
+        <label
+          >Room service<input name="server" type="url" placeholder="wss://hall.example.org" required
+        /></label>
+        <label
+          >Room code<input name="room" value="friends" maxlength="32" pattern="[a-zA-Z0-9_-]+" required
+        /></label>
+        <p>Use the same service and room code as your friends. Up to eight players can meet in a room.</p>
+        <button class="primary">Enter room</button><button type="button" id="invite">Copy invitation</button
+        ><button type="button" id="solo">Play solo</button><output id="joinStatus"></output></form
+    ></template>
+    <template id="controlPanel"
+      ><h2>Hall controls</h2>
+      <dl>
+        <dt>Walk and look</dt>
+        <dd>
+          WASD or arrow keys and mouse. On touchscreens use the left stick and drag the right side to look.
+        </dd>
+        <dt>Throw and switch</dt>
+        <dd>Click or press Fire. Use 1–5, Q or the snowcaster rack to switch tools.</dd>
+        <dt>Practice and interact</dt>
+        <dd>
+          R rings the practice bell after a cleared encounter. E interacts. Walk through a ready portal to
+          enter.
+        </dd>
+        <dt>Quest 3</dt>
+        <dd>
+          Left stick moves, right stick snap-turns, right trigger fires and right grip cycles tools. A
+          interacts and B rings the bell.
+        </dd>
+      </dl></template
+    >
+    <template id="creditPanel"
+      ><h2>Credits</h2>
+      <p>
+        The Lantern Hall is built with Stephan Bange’s retro 3D engine. The original models, voxel
+        decorations, sprites, snowcasters and sounds are licensed under CC BY 4.0. Game code uses MIT.
+      </p>
+      <p>
+        <a href="CREDITS.md">Asset credits and licenses</a> ·
+        <a href="https://github.com/stbange/kalender2026">Source code</a>
+      </p></template
+    >
+    <script src="hall.js"></script>
+    <script src="xr.js"></script>
+    <script src="lantern.js"></script>
+  </body>
+</html>

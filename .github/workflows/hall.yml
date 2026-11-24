@@ -40,19 +40,20 @@ jobs:
           OPENSPEC_TELEMETRY: '0'
         run: |
           openspec validate --all --strict
-          cmake -S engine -B engine-cov -G Ninja -DENG_ENABLE_COVERAGE=ON -DENG_USE_LUAJIT=OFF
+          cmake -S engine -B engine-cov -G Ninja -DENG_ENABLE_COVERAGE=ON -DENG_USE_LUAJIT=OFF -DCMAKE_C_FLAGS=-fprofile-update=atomic
           cmake --build engine-cov -j4
           xvfb-run -a ctest --test-dir engine-cov --output-on-failure
-          gcovr --root engine --filter "$PWD/engine/src/" --lcov engine-cov/c_coverage.info engine-cov
+          gcovr --root engine --filter "$PWD/engine/src/" --gcov-ignore-parse-errors negative_hits.warn --lcov engine-cov/c_coverage.info engine-cov
           python engine/tests/check_coverage.py engine-cov
       - name: Test first-party C and Lua, then real network play
         run: |
-          cmake -S . -B build-cov -G Ninja -DHALL_COVERAGE=ON
+          cmake -S . -B build-cov -G Ninja -DHALL_COVERAGE=ON -DCMAKE_C_FLAGS=-fprofile-update=atomic
           cmake --build build-cov -j4
           ctest --test-dir build-cov -R '^hall_units$' --output-on-failure
           mkdir reports
           gcovr --root . --filter "$PWD/src/" --filter "$PWD/server/" --fail-under-line 95 --txt reports/c-units.txt --print-summary build-cov
           python tests/lua_coverage.py | tee reports/lua-units.txt
+          python tests/coverage_guard.py
           ctest --test-dir build-cov --output-on-failure
           build-cov/lantern --root . --fixture tests/fixture --headless --doctor
       - name: Package release Linux client and room
@@ -61,8 +62,12 @@ jobs:
           cmake --build build -j4 --target lantern
           python tools/package.py --build build --out dist/linux
           python tools/linux_libs.py dist/linux
-          (cd /tmp && "$GITHUB_WORKSPACE/dist/linux/lantern" --headless --doctor)
+          (cd /tmp && env -u LD_LIBRARY_PATH "$GITHUB_WORKSPACE/dist/linux/lantern" --headless --doctor)
           tar -C dist/linux -czf lantern-linux-x86_64.tar.gz .
+          python tools/package.py --build build --out dist/room --server
+          python tools/linux_libs.py dist/room
+          python tests/server_package.py dist/room
+          tar -C dist/room -czf lantern-room-linux-x86_64.tar.gz .
       - uses: mymindstorm/setup-emsdk@v14
         with:
           version: 4.0.15
@@ -112,15 +117,40 @@ jobs:
           cmake --build build -j4
           ctest --test-dir build --output-on-failure
           python tools/package.py --build build --out dist/windows
-          ldd build/lantern.exe | awk '/\/ucrt64\/bin\// { print $3 }' | xargs -I '{}' cp -n '{}' dist/windows/
+          python tools/windows_libs.py dist/windows "$(cygpath -m /ucrt64)"
           curl -fsS https://curl.se/ca/cacert.pem -o dist/windows/cacert.pem
           location="$PWD/dist/windows"
-          (cd /tmp && "$location/lantern.exe" --headless --doctor)
+          (cd /tmp && PATH=/c/Windows/System32 "$location/lantern.exe" --headless --doctor)
           cd dist/windows && zip -qr ../../lantern-windows-x86_64.zip .
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: lantern-windows-x86_64.zip
+
+  release:
+    needs: [linux-web, windows]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-and-web
+          path: packages
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: packages
+      - name: Publish matching native and Web archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(sed -n 's/^project(kalender2026 VERSION \([^ ]*\) .*/\1/p' CMakeLists.txt)
+          tag="v${version}-hall"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" packages/* --target "$GITHUB_SHA" --title "The Lantern Hall $version" --notes-file hosting/release-notes.md
+          fi
 
   pages:
     needs: [linux-web, windows]
