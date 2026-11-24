@@ -38,7 +38,7 @@ The first playable milestone is an eight-player hall, its 24 portals and the sha
 
 ## 6. Package, verify and publish
 
-- [ ] 6.1 Produce Windows and Linux client archives and the Linux server package, including loose content and notices. Run each from outside its install directory. Confirm the release manifest omits the test mission and that all referenced files exist.
+- [x] 6.1 Produce Windows and Linux client archives and the Linux server package, including loose content and notices. Run each from outside its install directory. Confirm the release manifest omits the test mission and that all referenced files exist.
 - [x] 6.2 Build the game-specific Web shell with Emscripten/WebGL2. Fetch the hall first and each mission on demand. Smoke-test a project-path deployment in a clean browser with touch and desktop input, checked network requests, external Lua/assets, and persistent saves.
 - [x] 6.3 Run strict OpenSpec validation, native CTest, separate game C and Lua unit coverage reports, the engine spatial doctor and deterministic headless playtests. Run the live-network tests separately from loopback tests and retain the reports and failure captures.
 - [ ] 6.4 Rehearse the day-24 hall with eight players and the range active. Capture frame timing on a reference desktop, an identified Android handset, an iPhone and Quest 3. Check the design's 60/30/72 targets, portal readability, touch response and VR comfort.
@@ -53,6 +53,8 @@ The first playable milestone is an eight-player hall, its 24 portals and the sha
 ## Verification record
 
 The Windows and Linux headless tests use a real room process. The eight-client scenario runs on December 24 with a live range, follows two friends into the test-only co-op room, and checks the first return wave. The complete-gallery playthrough reaches all 24 arches through normal movement input. The browser suite serves the actual Wasm build under a project subpath, exercises desktop and three-finger touch input, tests a native and browser client in the same TLS room, and drives the stereo lifecycle against a simulated headset. A second browser test changes the fixture content, retries an unavailable asset and recovers an ornament after closing the browser. The dedicated Linux service package also accepts a real connection from outside its installation directory.
+
+The visual check captures arrival, door 24 and the range. A local 960 × 540 Chromium software-rendering run with eight simulated players and an active range measured 133.4 ms median frame time over 32 frames. Reports record the renderer and timing for each run.
 
 Physical Quest 3, iPhone and Android frame-rate, readability and comfort checks still require those devices. Public multiplayer checks require the operator's Linux service to be online. The room address is editable in-game. The OpenSpec change stays open through public and physical-device acceptance.
 

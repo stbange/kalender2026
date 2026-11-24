@@ -4,6 +4,8 @@ A first-person Christmas hall for up to eight friends. Walk around the tree to f
 
 [Play the Web edition on GitHub Pages](https://stbange.github.io/kalender2026/) · [Download a native release](https://github.com/stbange/kalender2026/releases) · [Art credits](CREDITS.md)
 
+![The snowball pistol at the red-carpet entrance, facing the Christmas tree and numbered portals](docs/hall.png)
+
 ## Play
 
 Unpack the whole native archive and run `lantern.exe` or `./lantern`. The Web edition runs in a WebGL2 browser. Solo practice starts immediately. To meet friends, open **Join friends** in the Web menu or press **F2** in the native game, enter the same WebSocket service and room code, and connect. The Web form can copy a shareable invitation. Addresses and room codes are remembered on each device. A full room accepts a new player when someone leaves.

@@ -64,7 +64,7 @@ def package(build, out, web, fixture=None, server=False):
     for name in ("LICENSE", "CREDITS.md", "README.md"):
         if (ROOT / name).is_file():
             copy(ROOT / name, out / name)
-    for folder in ("licenses", "hosting"):
+    for folder in ("licenses", "hosting", "docs"):
         if (ROOT / folder).is_dir():
             shutil.copytree(ROOT / folder, out / folder, dirs_exist_ok=True)
     copy(ROOT / "engine/THIRD_PARTY_NOTICES.md", out / "licenses/ENGINE-NOTICES.md")

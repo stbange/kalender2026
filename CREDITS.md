@@ -8,6 +8,7 @@ Credit the original visual and audio work as **The Lantern Hall (2026), Kalender
 | `games/kalender2026/assets/*.png` and `web/icons/*.png` | Kalender 2026 contributors | The same generator | CC BY 4.0 | Original palette, sprites and tool icons |
 | `games/kalender2026/assets/*.wav` | Kalender 2026 contributors | The same generator | CC BY 4.0 | Original synthesized snow throw, bell and poof |
 | Voxel wreath shape in `scripts/world.lua` | Kalender 2026 contributors | External game script | CC BY 4.0 for the shape, MIT for rendering code | Original voxel pattern |
+| `docs/hall.png` | Kalender 2026 contributors | Captured in the running Web edition | CC BY 4.0 | Original gameplay capture |
 | `web/fonts/cinzel.woff2` | Cinzel Project Authors | [Cinzel](https://github.com/NDISCOVER/Cinzel) via Fontsource | SIL OFL 1.1 | Distributed Latin web font |
 | `web/fonts/barlow.woff2` | Barlow Project Authors | [Barlow](https://github.com/jpt/barlow) via Fontsource | SIL OFL 1.1 | Distributed Latin web font |
 | `engine/assets/shared/fonts/proggy_clean.ttf` | Tristan Grimmer | [Proggy Fonts](https://github.com/bluescan/proggyfonts) | MIT | Unmodified engine asset |
