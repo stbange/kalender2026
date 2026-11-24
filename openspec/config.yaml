@@ -1,0 +1,10 @@
+schema: spec-driven
+
+context: |
+  Kalender 2026 is a first-person Christmas advent game for up to eight friends per room.
+  Use stbange/engine from main in engine/, C11, SDL3, OpenGL and external Lua 5.1.
+  Targets are Windows, Linux, Emscripten Web with mobile touch, and stereo WebXR on Meta Quest 3.
+  Publish the client through GitHub Pages from main. The live room service runs on a separate Linux host.
+  Keep game scripts and assets editable beside each distribution. License original code under MIT and original game art and audio under CC BY 4.0.
+  Use DietrichGebert/ponytail development guidance and a separate OpenSpec change for each mission.
+  Require at least 95% unit-test line coverage for first-party C and for first-party Lua, plus automated multiplayer gameplay tests.
