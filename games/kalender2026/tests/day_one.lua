@@ -41,7 +41,7 @@ local function walk(g, x, z, stop)
     return distance <= stop
 end
 function playtest_frame(f)
-    HostUTC = 1796079600
+    HostUTC = 1796079599
     local g = game.state
     eng.input.inject("fire", false)
     eng.input.inject("interact", false)

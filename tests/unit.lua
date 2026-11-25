@@ -51,9 +51,16 @@ local spectator = H.join(r, 3)
 assert(not H.enter(r, p, 1, MissionPacks))
 p.x, p.z = H.door(1)
 q.x, q.z = p.x, p.z
+assert(H.ready_count(0, { [1] = {}, [19] = {} }) == 2)
+assert(H.door_state(19, 0, { [19] = {} }) == "ready")
+assert(not H.enter(r, p, 1, {}) and p.notice:find("December"))
+H.playInstalledEarly = false
 assert(not H.enter(r, p, 1, MissionPacks) and p.notice:find("December"))
+assert(H.ready_count(1, { [1] = {}, [19] = {} }) == 1)
+H.playInstalledEarly = true
 r.hours = 1
 assert(not H.enter(r, p, 1, {}) and p.notice:find("preparation"))
+r.hours = 0
 assert(H.enter(r, p, 1, MissionPacks))
 assert(not H.objective(r, spectator, MissionPacks))
 p.z = 0

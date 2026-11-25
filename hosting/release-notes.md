@@ -1,6 +1,6 @@
-The Lantern Hall 0.4.1 changes aiming on phones and tablets. Drag the open screen to look around. Double-tap near the same spot to throw a snowball, or hold and drag the second tap to keep firing while you aim. Your other thumb can keep moving on the stick. The dedicated Fire button responds on the first press.
+The Lantern Hall 0.5.0 opens every installed mission immediately during playtesting. Walk into Door 1 to play **Last Launch from Tinseltown** from the cinema roof to the Moon Bowl. The hall shows how many doors are playable.
 
-This client connects to existing 0.4.0 rooms. Multiplayer addresses and saved ornaments carry forward.
+For co-op, use the matching Linux room service from this release. Its catalog revision is `last-launch-open-1`. Personal ornaments retain their existing save format.
 
 [Play on GitHub Pages](https://stbange.github.io/kalender2026/)
 

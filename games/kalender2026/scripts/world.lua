@@ -249,8 +249,9 @@ local function doors(r, awards)
     end
     for day, e in ipairs(W.doors) do
         local x, z, ix, iz = Hall.door(day)
-        local due = day <= r.hours
-        local ready = due and MissionPacks[day]
+        local state = Hall.door_state(day, r.hours, MissionPacks)
+        local due = state ~= "locked"
+        local ready = state == "ready"
         local marked = math.floor(awards / 2 ^ (day - 1)) % 2 == 1
         local color = ready and { 0.35, 0.72, 0.55, 1 }
             or due and { 0.37, 0.23, 0.11, 1 }

@@ -22,7 +22,12 @@ A room SHALL use a common calendar derived from its host device clock and Europe
 
 ### Requirement: Walk into a delivered mission
 
-A numbered portal SHALL admit a player when its date is due and the matching mission pack is ready. Crossing its threshold SHALL enter the day's mission. A future door SHALL block entry. A due door with a missing or unreadable pack SHALL show a content status and keep the player safely in the hall.
+A numbered portal SHALL admit a player when its date is due and the matching mission pack is ready. Crossing its threshold SHALL enter the day's mission. During open playtesting, a valid installed pack SHALL also admit players before its date. Clients and the room service SHALL apply the same rule to every installed day. With playtesting disabled, a future door SHALL block entry. A due door with a missing or unreadable pack SHALL show a content status and keep the player safely in the hall.
+
+#### Scenario: Play an installed mission early
+
+- **WHEN** open playtesting is enabled before December and only days 01 and 19 have valid installed packs
+- **THEN** the hall shows two playable doors, players can walk into either one in solo or a shared room, and the other 22 doors stay closed.
 
 #### Scenario: The first mission arrives independently
 

@@ -8,6 +8,7 @@ local function move(x, z)
     eng.input.inject("down", z > 0.18)
 end
 function playtest_frame()
+    Hall.playInstalledEarly = false -- Exercise locked thresholds in the scheduled release mode.
     HostUTC = 1796079599
     local g = game.state
     if day <= 24 then

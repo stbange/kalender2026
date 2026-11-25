@@ -1,0 +1,43 @@
+name: Publish a locally tested Web release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag for this main commit
+        required: true
+      sha256:
+        description: SHA-256 of the locally tested lantern-web.tar.gz
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Retrieve the tested archive from this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SHA256: ${{ inputs.sha256 }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9.]+-hall$ && "$SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$TAG" --jq .sha)" = "$GITHUB_SHA"
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p lantern-web.tar.gz
+          echo "$SHA256  lantern-web.tar.gz" | sha256sum --check
+          mkdir site
+          tar -xzf lantern-web.tar.gz -C site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

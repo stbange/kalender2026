@@ -252,20 +252,21 @@ function update(dt)
     local use = eng.input.pressed("interact")
     if g.space == 0 then
         local day = Hall.near_door(g.x, g.z, 1.1)
-        if use and day and day > r.hours then
+        local state = day and Hall.door_state(day, r.hours, MissionPacks)
+        if use and state == "locked" then
             Feedback.knock(g, day)
         end
-        if day and g.clock > g.doorGuard and (MissionPacks[day] or use) then
-            if day <= r.hours and MissionPacks[day] and not World.prepared[day] and HostWeb then
+        if day and g.clock > g.doorGuard and (state == "ready" or use) then
+            if state == "ready" and not World.prepared[day] and HostWeb then
                 if not g.loadingDay then
                     g.assetRequest = day
                     g.loadingDay = day
                 end
             else
-                if day <= r.hours and MissionPacks[day] then
+                if state == "ready" then
                     host_pack_ready(day, true)
                 end
-                if not MissionPacks[day] or day > r.hours or World.prepared[day] then
+                if state ~= "ready" or World.prepared[day] then
                     command(g, "ENTER " .. day)
                     g.doorGuard = g.clock + 0.6
                 end
@@ -337,12 +338,13 @@ function host_hud()
     else
         local day = Hall.near_door(g.x, g.z, 4)
         if day then
-            local state = day > r.hours and ("Opens " .. day .. " December")
-                or (MissionPacks[day] and "Walk through" or "Mission in preparation")
-            if math.floor(g.awards / 2 ^ (day - 1)) % 2 == 1 then
-                state = "Ornament earned · replay"
+            local state = Hall.door_state(day, r.hours, MissionPacks)
+            local label = state == "locked" and ("Opens " .. day .. " December") or "Mission in preparation"
+            if state == "ready" then
+                label = math.floor(g.awards / 2 ^ (day - 1)) % 2 == 1 and "Ornament earned · replay"
+                    or "Walk through"
             end
-            hint = string.format("Door %02d · %s", day, state)
+            hint = string.format("Door %02d · %s", day, label)
         elseif alive == 0 then
             hint = "Hall clear · ring the practice bell to play again"
         elseif r.players[g.id] and r.players[g.id].slow > r.time then
@@ -362,7 +364,7 @@ function host_hud()
         r.hits,
         alive,
         r.wave,
-        r.hours,
+        Hall.ready_count(r.hours, MissionPacks),
         count,
         g.connection,
         hint,
@@ -416,7 +418,12 @@ function draw()
         18,
         1
     )
-    eng.render.draw_text(g.connection .. "    /    " .. g.room.hours .. " of 24 doors due", 18, 50, 1)
+    eng.render.draw_text(
+        g.connection .. "    /    " .. Hall.ready_count(g.room.hours, MissionPacks) .. " of 24 doors playable",
+        18,
+        50,
+        1
+    )
     local hint = h:match("^[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|([^|]*)")
     if hint and #hint > 0 then
         eng.render.draw_text(hint, 18, 82, 1)

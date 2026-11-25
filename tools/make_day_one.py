@@ -546,7 +546,7 @@ if __name__ == "__main__":
     for build in (cinema, diner, silos, flight, luna, bowl, props):
         build()
     catalog = {
-        "revision": "last-launch-1",
+        "revision": "last-launch-open-1",
         "missions": [
             {
                 "day": 1,

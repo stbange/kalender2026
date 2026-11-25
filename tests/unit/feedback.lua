@@ -153,7 +153,7 @@ assert(host_sound():find("bell") and g.clock < f.tallyUntil)
 assert(F.hud(g):find("Bell 3"))
 -- Status and contact coexist with ordinary door text and repeated contact stays quiet.
 g.awards, g.noteUntil = 0, 0
-g.x, g.z = Hall.door(1)
+g.x, g.z = Hall.door(2)
 g.room.players[1].slow = g.room.time + 1.3
 F.tick(g)
 assert(host_hud():find("Opens") and F.hud(g):find("Slowed"))

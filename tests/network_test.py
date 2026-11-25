@@ -23,7 +23,7 @@ def free_port():
 
 
 @contextlib.contextmanager
-def service(binary, root, fixture=False):
+def service(binary, root, fixture=False, clock=1798066800):
     port = free_port()
     args = [str(binary), "--root", str(root), "--serve", "--port", str(port)]
     if fixture:
@@ -32,7 +32,7 @@ def service(binary, root, fixture=False):
                 "--fixture",
                 str(root / "tests/fixture" if fixture is True else fixture),
                 "--test-clock",
-                "1798066800",
+                str(clock),
             ]
         )
     with subprocess.Popen(args, stdout=subprocess.PIPE, text=True) as proc:
@@ -179,7 +179,7 @@ class HallConnection(ClientConnection):
         return message
 
 
-def hello(url, room="friends", revision="last-launch-1", **kwargs):
+def hello(url, room="friends", revision="last-launch-open-1", **kwargs):
     ws = connect(
         url,
         proxy=None,
@@ -280,7 +280,7 @@ def public_room(binary, root):
         url = f"ws://127.0.0.1:{port}"
         clients = []
 
-        def join(room="friends", revision="last-launch-1"):
+        def join(room="friends", revision="last-launch-open-1"):
             ws, answer = hello(url, room, revision)
             stack.callback(ws.close)
             return ws, answer
@@ -312,7 +312,7 @@ def public_room(binary, root):
         joined = snapshot(new, lambda s: s["hits"] == 1)
         assert joined["wave"] == 1 and joined["latest"] == bell["id"]
         assert joined["seats"][8] != s["seats"][8]
-        new.send("HELLO3 last-launch-1 friends")
+        new.send("HELLO3 last-launch-open-1 friends")
         assert len(snapshot(new, lambda s: True)["players"]) == 8
         with tempfile.TemporaryDirectory() as tmp, tls_proxy(port, tmp) as (secure, cert, names):
             witness, answer = join("native")
@@ -429,7 +429,7 @@ def last_launch(binary, root):
     # A plain directory keeps the production catalog mounted. Only the local test clock is overridden.
     with (
         tempfile.TemporaryDirectory() as fixture,
-        service(binary, root, Path(fixture)) as port,
+        service(binary, root, Path(fixture), clock=1796079599) as port,
         contextlib.ExitStack() as stack,
     ):
         clients = []
@@ -463,7 +463,7 @@ def last_launch(binary, root):
         walk([spectator], (watch["x"], watch["z"]), (-23, 17.5))
         spectator.send("ENTER 1")
         all_in = snapshot(spectator, lambda s: len(s["mission_players"]) == 8)
-        assert all_in["players"][8]["progress"] == 2
+        assert all_in["days"] == 0 and all_in["players"][8]["progress"] == 2
     print("Eight real engine WebSocket clients shared the production mission and independent remotes.")
 
 

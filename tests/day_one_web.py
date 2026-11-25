@@ -7,14 +7,20 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 from browser_smoke import website, open_game
 
-# Stage a player at a due door. Input, loading, firing, snapshots and rendering are production paths.
+# Stage a player at Door 1 before December. Input, loading, firing, snapshots and rendering are production paths.
 PROBE = """
-local boot,hud=init,host_hud
+local boot,step,hud=init,update,host_hud
 function init()
+    HostUTC=1796079599
     boot()
     local g=game.state
     g.x,g.z=Hall.door(1)
     g.room.players[1].x,g.room.players[1].z=g.x,g.z
+end
+
+function update(dt)
+    HostUTC=1796079599
+    step(dt)
 end
 
 function host_hud()
@@ -38,7 +44,7 @@ def stereo(browser, url):
     context.add_init_script(path=str(Path(__file__).with_name("xr_device.js")))
     page = context.new_page()
     stage(page)
-    open_game(page, url + "?preview=day1")
+    open_game(page, url)
     page.locator("#enter").click()
     state = "hudText.split('|').at(-1).split(',')"
     page.wait_for_function(state + "[2]==='1'")
@@ -67,10 +73,11 @@ def check(browser, url, options, capture):
     )
 
     stage(page)
-    open_game(page, url + "?preview=day1")
+    open_game(page, url)
     page.locator("#enter").tap()
     state = "hudText.split('|').at(-1).split(',')"
     page.wait_for_function(state + "[2]==='1'", timeout=60000)
+    assert page.locator("#days").text_content() == "1"
     assert page.locator("#hint").text_content().startswith("Rooftop")
     assert len(art) >= 20 and all(s == 200 for s in art)
     x, y = page.viewport_size["width"] * 0.82, page.viewport_size["height"] * 0.53

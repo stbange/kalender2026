@@ -55,6 +55,23 @@ function H.due(now)
     -- 1 December 2026 at 00:00 Europe/Warsaw = 30 November at 23:00 UTC.
     return H.clamp(1 + math.floor((now - 1796079600) / 86400), 0, 24)
 end
+-- Set to false when the playtest ends to restore the Warsaw release schedule.
+H.playInstalledEarly = true
+function H.door_state(day, due, packs)
+    if packs[day] and (H.playInstalledEarly or day <= due) then
+        return "ready"
+    end
+    return day <= due and "pending" or "locked"
+end
+function H.ready_count(due, packs)
+    local count = 0
+    for day in pairs(packs) do
+        if H.door_state(day, due, packs) == "ready" then
+            count = count + 1
+        end
+    end
+    return count
+end
 function H.door(day)
     local wing = math.floor((day - 1) / 6)
     local along = ((day - 1) % 6 - 2.5) * 7
@@ -185,12 +202,9 @@ function H.enter(r, p, day, packs)
     if p.space ~= 0 or H.near_door(p.x, p.z, 2.1) ~= day then
         return false
     end
-    if day > r.hours then
-        p.notice = "Opens on December " .. day
-        return false
-    end
-    if not packs[day] then
-        p.notice = "Mission in preparation"
+    local state = H.door_state(day, r.hours, packs)
+    if state ~= "ready" then
+        p.notice = state == "locked" and ("Opens on December " .. day) or "Mission in preparation"
         return false
     end
     local run = r.instances[day]
