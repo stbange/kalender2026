@@ -27,7 +27,14 @@ def service(binary, root, fixture=False):
     port = free_port()
     args = [str(binary), "--root", str(root), "--serve", "--port", str(port)]
     if fixture:
-        args.extend(["--fixture", str(root / "tests/fixture"), "--test-clock", "1798066800"])
+        args.extend(
+            [
+                "--fixture",
+                str(root / "tests/fixture" if fixture is True else fixture),
+                "--test-clock",
+                "1798066800",
+            ]
+        )
     with subprocess.Popen(args, stdout=subprocess.PIPE, text=True) as proc:
         try:
             assert "listening" in proc.stdout.readline(), "room process failed to start"
@@ -54,18 +61,56 @@ def test_identity(directory):
         subprocess.run(["openssl", *args], check=True, capture_output=True)
 
     openssl(
-        "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-        "-subj", "/CN=Hall test root", "-addext", "basicConstraints=critical,CA:TRUE",
-        "-keyout", ca_key, "-out", ca,
+        "req",
+        "-x509",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-days",
+        "1",
+        "-subj",
+        "/CN=Hall test root",
+        "-addext",
+        "basicConstraints=critical,CA:TRUE",
+        "-keyout",
+        ca_key,
+        "-out",
+        ca,
     )
-    openssl("req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=localhost",
-            "-keyout", key, "-out", request)
+    openssl(
+        "req",
+        "-new",
+        "-newkey",
+        "rsa:2048",
+        "-nodes",
+        "-subj",
+        "/CN=localhost",
+        "-keyout",
+        key,
+        "-out",
+        request,
+    )
     extensions.write_text(
         "basicConstraints=critical,CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\n"
         "extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost\n"
     )
-    openssl("x509", "-req", "-in", request, "-CA", ca, "-CAkey", ca_key, "-CAcreateserial",
-            "-days", "1", "-extfile", extensions, "-out", cert)
+    openssl(
+        "x509",
+        "-req",
+        "-in",
+        request,
+        "-CA",
+        ca,
+        "-CAkey",
+        ca_key,
+        "-CAcreateserial",
+        "-days",
+        "1",
+        "-extfile",
+        extensions,
+        "-out",
+        cert,
+    )
     # Exercise the same Windows-exported trust file on every native platform.
     ca.write_bytes(b"\r\n".join(ca.read_bytes().splitlines()) + b"\r\n")
     return cert, key, ca
@@ -134,7 +179,7 @@ class HallConnection(ClientConnection):
         return message
 
 
-def hello(url, room="friends", revision="lantern-2", **kwargs):
+def hello(url, room="friends", revision="last-launch-1", **kwargs):
     ws = connect(
         url,
         proxy=None,
@@ -170,6 +215,8 @@ def snapshot(ws, predicate, timeout=8):
             seats={},
             events=[],
             latest=0,
+            loads=[],
+            mission_players={},
         )
         for row in lines[1:]:
             if row[0] == "I":
@@ -204,6 +251,10 @@ def snapshot(ws, predicate, timeout=8):
                     progress=int(progress),
                     done=int(done),
                 )
+            elif row[:3] == ["D", "1", "3"]:
+                state["loads"].append(row[3:])
+            elif row[:3] == ["D", "1", "2"]:
+                state["mission_players"][int(row[3])] = int(row[6])
             elif row[0] == "T":
                 state["targets"][int(row[1])] = float(row[2])
             elif row[0] == "M":
@@ -229,7 +280,7 @@ def public_room(binary, root):
         url = f"ws://127.0.0.1:{port}"
         clients = []
 
-        def join(room="friends", revision="lantern-2"):
+        def join(room="friends", revision="last-launch-1"):
             ws, answer = hello(url, room, revision)
             stack.callback(ws.close)
             return ws, answer
@@ -261,7 +312,7 @@ def public_room(binary, root):
         joined = snapshot(new, lambda s: s["hits"] == 1)
         assert joined["wave"] == 1 and joined["latest"] == bell["id"]
         assert joined["seats"][8] != s["seats"][8]
-        new.send("HELLO3 lantern-2 friends")
+        new.send("HELLO3 last-launch-1 friends")
         assert len(snapshot(new, lambda s: True)["players"]) == 8
         with tempfile.TemporaryDirectory() as tmp, tls_proxy(port, tmp) as (secure, cert, names):
             witness, answer = join("native")
@@ -374,6 +425,46 @@ def coop(binary, root):
     print("Day-24 hall, shared objective, late follower, spectator, ornaments and one return wave passed.")
 
 
+def last_launch(binary, root):
+    # A plain directory keeps the production catalog mounted. Only the local test clock is overridden.
+    with (
+        tempfile.TemporaryDirectory() as fixture,
+        service(binary, root, Path(fixture)) as port,
+        contextlib.ExitStack() as stack,
+    ):
+        clients = []
+        for seat in range(8):
+            ws, answer = hello(f"ws://127.0.0.1:{port}", "last_launch")
+            stack.callback(ws.close)
+            assert answer == f"WELCOME {seat + 1}"
+            clients.append(ws)
+        walk(clients[:7], (0, 17), (-23, 17.5))
+        for ws in clients[:7]:
+            ws.send("ENTER 1")
+        snapshot(clients[7], lambda s: sum(p["space"] == 1 for p in s["players"].values()) == 7)
+        walk(clients[:2], (0, 5), (-8, -9))
+        for ws in clients[:2]:
+            ws.send("USE")
+        for ws in clients[:2]:
+            s = snapshot(ws, lambda s: s["players"][1]["progress"] == 2 and bool(s["loads"]))
+            assert len(s["mission_players"]) == 7 and s["players"][8]["space"] == 0
+        for ws in clients[:2]:
+            ws.send("F 1 1 0 0 -1")
+        snapshot(clients[7], lambda s: sum(s["mission_players"].values()) == 2)
+        time.sleep(0.3)
+        clients[0].send("F 2 1 0 0 -1")
+        state = snapshot(clients[1], lambda s: s["mission_players"].get(1) == 0)
+        assert state["mission_players"][2] == 1
+        spectator = clients[7]
+        spectator.send("F 1 1 -.1592 .00796 -.98722")
+        snapshot(spectator, lambda s: s["hits"] == 1)
+        walk([spectator], (0, 17), (-23, 17.5))
+        spectator.send("ENTER 1")
+        all_in = snapshot(spectator, lambda s: len(s["mission_players"]) == 8)
+        assert all_in["players"][8]["progress"] == 2
+    print("Eight real engine WebSocket clients shared the production mission and independent remotes.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("binary", type=Path)
@@ -382,3 +473,4 @@ if __name__ == "__main__":
     public_room(args.binary.resolve(), args.root.resolve())
     coop(args.binary.resolve(), args.root.resolve())
     capacity(args.binary.resolve(), args.root.resolve())
+    last_launch(args.binary.resolve(), args.root.resolve())

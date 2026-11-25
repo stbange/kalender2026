@@ -117,7 +117,7 @@ int hall_run(int argc, char **argv)
     }
     if (!status && o.test) {
         char error[1024] = {0};
-        status = eng_runtime_run_playtest(rt, o.test, 4800, error, sizeof(error)) ? 0 : 1;
+        status = eng_runtime_run_playtest(rt, o.test, o.frames ? (int)o.frames : 4800, error, sizeof(error)) ? 0 : 1;
         printf("Playtest %s %s\n", status ? "FAILED" : "passed", error);
     } else if (!status && !o.doctor) {
 #ifndef __EMSCRIPTEN__

@@ -29,11 +29,18 @@ def package(build, out, web, fixture=None, server=False):
             if f.is_file():
                 stage(f, f.relative_to(ROOT))
     src = ROOT / GAME
+    catalog_path = Path("missions/catalog.json")
+    catalog = json.loads(
+        ((fixture if fixture and (fixture / catalog_path).is_file() else src) / catalog_path).read_text()
+    )
+    client_assets = {Path(item) for mission in catalog["missions"] for item in mission.get("files", [])}
     for f in sorted(src.rglob("*")):
         rel = f.relative_to(src)
         if server and (
-            rel.parts[0] in ("assets", "shaders")
-            or rel.as_posix() in (
+            rel in client_assets
+            or rel.parts[0] in ("assets", "shaders")
+            or rel.as_posix()
+            in (
                 "scripts/world.lua",
                 "scripts/main.lua",
                 "scripts/feedback.lua",
@@ -46,9 +53,8 @@ def package(build, out, web, fixture=None, server=False):
             stage(f, GAME / rel)
     if fixture:
         for f in sorted(fixture.rglob("*")):
-            if f.is_file():
+            if f.is_file() and not (server and f.relative_to(fixture) in client_assets):
                 stage(f, GAME / f.relative_to(fixture))
-    catalog = json.loads((out / GAME / "missions/catalog.json").read_text())
     groups = {}
     for mission in catalog["missions"]:
         paths = []
@@ -96,7 +102,11 @@ def package(build, out, web, fixture=None, server=False):
         exe = next(
             (
                 p
-                for p in (build / "lantern", build / "lantern.exe", build / "Release/lantern.exe")
+                for p in (
+                    build / "lantern",
+                    build / "lantern.exe",
+                    build / "Release/lantern.exe",
+                )
                 if p.is_file()
             ),
             None,

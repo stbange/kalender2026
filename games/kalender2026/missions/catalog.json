@@ -1,1 +1,51 @@
-{"revision":"lantern-2","missions":[]}
+{
+  "revision": "last-launch-1",
+  "missions": [
+    {
+      "day": 1,
+      "title": "Last Launch from Tinseltown",
+      "script": "missions/day_01.lua",
+      "files": [
+        "missions/day_01/matinee.png",
+        "missions/day_01/poster.glb",
+        "missions/day_01/cinema.glb",
+        "missions/day_01/diner.glb",
+        "missions/day_01/silos.glb",
+        "missions/day_01/cabin.glb",
+        "missions/day_01/luna.glb",
+        "missions/day_01/bowl.glb",
+        "missions/day_01/cracker.glb",
+        "missions/day_01/freezer.glb",
+        "missions/day_01/shrinker.glb",
+        "missions/day_01/twins.glb",
+        "missions/day_01/cue-use.png",
+        "missions/day_01/cue-freeze.png",
+        "missions/day_01/cue-click.png",
+        "missions/day_01/cue-shrink.png",
+        "missions/day_01/cue-clear.png",
+        "missions/day_01/cue-escort.png",
+        "missions/day_01/cue-launch.png",
+        "missions/day_01/cue-home.png",
+        "missions/day_01/cue-rocket.png",
+        "missions/day_01/egg-0.png",
+        "missions/day_01/egg-1.png",
+        "missions/day_01/egg-2.png",
+        "missions/day_01/egg-3.png",
+        "missions/day_01/usher.glb",
+        "missions/day_01/courier.glb",
+        "missions/day_01/skater.glb",
+        "missions/day_01/loader.glb",
+        "missions/day_01/guard.glb",
+        "missions/day_01/queen.glb",
+        "missions/day_01/hatchling.glb",
+        "missions/day_01/rocket.glb",
+        "missions/day_01/cart.glb",
+        "missions/day_01/plywood.glb",
+        "missions/day_01/score.glb",
+        "missions/day_01/out.glb",
+        "missions/day_01/corn.glb",
+        "missions/day_01/earth.glb"
+      ]
+    }
+  ]
+}

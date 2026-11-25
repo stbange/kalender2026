@@ -43,7 +43,7 @@ float sample_shadow(vec4 sc) {
 void main() {
     vec4 tex = texture(u_albedo_tex, v_uv) * v_color * u_tint;
     // The floor's alpha byte stores separate four-bit visibility masks for lights 0 and 1.
-    bool floor_receiver = u_mat_mr.x < -1.5;
+    bool floor_receiver = u_mat_mr.x < -1.5 && u_mat_mr.x > -3.5;
     vec2 blocked = vec2(0.0);
     if (floor_receiver) {
         if (any(lessThan(v_uv, vec2(0.0))) || any(greaterThan(v_uv, vec2(1.0)))) discard;
@@ -75,6 +75,8 @@ void main() {
     float roughness = u_mat_mr.y;
 
     vec3 Lo = u_emissive;
+    // Illustrated mission scenery keeps its palette under the stage fill lights.
+    if (u_mat_mr.x < -3.5) Lo += albedo * (0.42 + 0.21 * N.y + 0.09 * N.z);
     if (any(greaterThan(u_ambient, vec3(0.0)))) {
         Lo += eng_env_ibl(N, V, albedo, metallic, roughness, u_sky_zenith, u_sky_horizon, u_sky_ground, u_ambient);
     }

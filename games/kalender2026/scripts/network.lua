@@ -20,7 +20,8 @@ function Net.command(r, id, line, packs)
     end
     local w = Net.words(line)
     if w[1] == "P" then
-        local x, z, yaw = number(w[2], -24, 24), number(w[3], -24, 24), number(w[4], -360, 360)
+        local bound = p.space == 0 and 24 or 512
+        local x, z, yaw = number(w[2], -bound, bound), number(w[3], -bound, bound), number(w[4], -360, 360)
         if not x or not z or not yaw then
             return
         end
@@ -28,14 +29,21 @@ function Net.command(r, id, line, packs)
         local distance = math.sqrt(dx ^ 2 + dz ^ 2)
         local budget = Hall.walk_speed(r, p) * Hall.clamp(r.time - p.last_pose, 0, 0.5) + 0.10
         local ratio = distance > budget and budget / distance or 1
-        p.x, p.z = Hall.move(p.x, p.z, dx * ratio, dz * ratio, p.space)
+        p.x, p.z = Hall.move(p.x, p.z, dx * ratio, dz * ratio, p.space, r.instances[p.space], p)
         p.yaw, p.last_pose = yaw, r.time
     elseif w[1] == "F" then
         local seq, k = number(w[2], 1, 1000000000), number(w[3], 1, 5)
         local dx, dy, dz = number(w[4], -1, 1), number(w[5], -1, 1), number(w[6], -1, 1)
         local ox, oy, oz = number(w[7] or 0, -1, 1), number(w[8] or 0, -1.5, 1), number(w[9] or 0, -1, 1)
         if seq and k and dx and dy and dz and ox and oy and oz then
-            Hall.fire(r, p, seq, k, dx, dy, dz, ox, oy, oz)
+            local run = r.instances[p.space]
+            if run and run.pack.fire then
+                if not run.done then
+                    run.pack.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
+                end
+            else
+                Hall.fire(r, p, seq, k, dx, dy, dz, ox, oy, oz)
+            end
         end
     elseif w[1] == "ENTER" then
         local day = number(w[2], 1, 24)
@@ -43,7 +51,8 @@ function Net.command(r, id, line, packs)
             Hall.enter(r, p, day, packs)
         end
     elseif w[1] == "BACK" then
-        if p.space ~= 0 and p.z > 5.9 then
+        local run = r.instances[p.space]
+        if run and (p.z > 5.9 or (run.pack.canReturn and run.pack.canReturn(run, p))) then
             Hall.back(r, p)
         end
     elseif w[1] == "USE" then
@@ -89,6 +98,11 @@ function Net.snapshot(r)
             run and run.progress or 0,
             run and run.done and 1 or 0
         )
+    end
+    for day, run in pairs(r.instances) do
+        if run.pack.snapshot then
+            run.pack.snapshot(rows, run, r.players, day)
+        end
     end
     for i, m in pairs(r.mobs) do
         rows[#rows + 1] =
@@ -166,6 +180,10 @@ function Net.read(s)
             if w[6] > 0 then
                 r.instances[w[6]] = { progress = w[10], done = w[11] == 1 }
             end
+        elseif w[1] == "D" and MissionPacks and MissionPacks[w[2]] and MissionPacks[w[2]].read then
+            if not MissionPacks[w[2]].read(r, w) then
+                return nil
+            end
         elseif w[1] == "M" and #w == 8 then
             r.mobs[w[2]] =
                 { kind = w[2], x = w[3], y = w[4], z = w[5], hp = w[6], wake = w[7], heading = w[8] }
@@ -184,7 +202,11 @@ function Net.read(s)
         and (#r.events == 0 or r.events[#r.events].id <= r.eventId)
     then
         for id, p in pairs(r.players) do
-            if not r.seats[id] then
+            local pack = MissionPacks and MissionPacks[p.space]
+            if
+                not r.seats[id]
+                or (pack and pack.validSnapshot and not pack.validSnapshot(r.instances[p.space], p))
+            then
                 return nil
             end
             p.seat = r.seats[id]

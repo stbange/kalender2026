@@ -35,6 +35,13 @@ Feedback = {
         "throw",
         "bell",
         "poof",
+        "d1-remote",
+        "d1-freeze",
+        "d1-shrink",
+        "d1-twins",
+        "d1-marquee",
+        "d1-earthrise",
+        "d1-score",
     },
     disabled = {}, -- Set an item ID to true to disable that optional cue, e.g. ["FIRE-07"]=true.
     hitTime = 0.09,

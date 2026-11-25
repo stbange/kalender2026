@@ -25,7 +25,9 @@ Unpack the whole native archive and run `lantern.exe` or `./lantern`. The Web ed
 
 The pistol fires one quick snowball. The Flurry Fan throws three in a fan. Hold the Snow Spinner for rapid fire. The Bankshot bounces around corners. The Snow Rocket bursts into a cloud that can hit nearby targets. Each arrival wave includes a scarf snowman, gingerbread skipper, penguin skater, clockwork guard and frost wisp. They appear a few seconds apart. The first friend to return from a mission starts one shared return wave. Other returning friends and late arrivals join the same wave.
 
-Doors become due one at a time at midnight in Europe/Warsaw, December 1–24, 2026. Solo play uses the device clock. Friends share their host's clock. A due door without a released pack says **Mission in preparation**. Installed missions support independent entry, shared objectives and walking back to the hall. Personal ornaments are saved on the device. The hall release ships with an empty mission catalog.
+Doors become due one at a time at midnight in Europe/Warsaw, December 1–24, 2026. Solo play uses the device clock. Friends share their host's clock. A due door without a released pack says **Mission in preparation**. Installed missions support independent entry, shared objectives and walking back to the hall. Personal ornaments are saved on the device. Door 1 includes **Last Launch from Tinseltown**. Follow the stolen brass rocket from a Los Angeles movie theater to the Moon Bowl. Look for the floating brass marker and use the labeled machinery. The dispatcher unlocks five mission tools along the way. Press Fire once to throw a snow cracker and release before pressing again to pop it. Friends share the route and checkpoints. The first trip targets about half an hour.
+
+For a local preview before December 1, serve the extracted Web build with `python3 -m http.server 8000 --bind 127.0.0.1` and open `http://127.0.0.1:8000/?preview=day1`. On a native build, create an empty directory called `preview-clock` beside the executable and run `./lantern --fixture preview-clock --test-clock 1796079600` (Windows uses `lantern.exe`). The same arguments work with the Linux room's `--serve` option for a local co-op preview. Regular play follows the Warsaw calendar.
 
 ## Snowplay feedback
 
@@ -37,7 +39,7 @@ Open **Feedback** in the Web menu or press **F3** in the native game to change m
 
 ## Host a room on Linux
 
-The **0.4.1** client works with the 0.4.0 and 0.4.1 room services. The game uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
+The **0.5.0** client and room service use the **last-launch-1** mission catalog revision. The game uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
 
 1. Point a domain at the host. Allow inbound TCP on ports 80 and 443 for Caddy's HTTPS certificate and WebSocket traffic. Keep port 8787 private.
 2. Install [Caddy](https://caddyserver.com/docs/install), replace the example domain in [hosting/Caddyfile](hosting/Caddyfile) and use it as the Caddy configuration. Caddy terminates TLS and proxies WebSocket upgrades.
@@ -98,6 +100,8 @@ node --test --experimental-test-coverage --test-coverage-include=web/look-taps.j
 ctest --test-dir build-cov --output-on-failure
 python3 tests/browser_smoke.py --site dist/web --binary build-cov/lantern
 python3 tests/touch_fire.py --site dist/web
+python3 tests/day_one_web.py --site dist/web
+python3 tests/day_one_web.py --site dist/web
 ```
 
 The C coverage command uses a fresh instrumented build. Lua coverage requires Lua 5.1 and its compiler, and inventories every first-party gameplay script. The upstream tests and their independent coverage gate run under `engine/`. Main's workflow builds the Linux, Windows and Web archives, runs the headless playthrough, creates live WebSocket rooms, and exercises desktop, touch and stereo lifecycle in the browser before Pages deployment. Set the repository's **Settings → Pages → Source** to **GitHub Actions**. The operator chooses the public multiplayer hostname in-game.

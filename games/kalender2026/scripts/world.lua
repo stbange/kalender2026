@@ -267,13 +267,19 @@ local function doors(r, awards)
             local a = day * 2.4
             W.ornaments[day] = object(
                 "Earned ornament " .. day,
-                mesh("bell"),
+                mesh(MissionPacks[day] and MissionPacks[day].ornament or "bell"),
                 math.cos(a) * 1.9,
                 2.8 + (day % 4) * 0.5,
                 math.sin(a) * 1.9
             )
             scale(W.ornaments[day], 0.4, 0.4, 0.4)
-            local badge = object("Completed door " .. day, mesh("bell"), x + ix * 0.3, 3.1, z + iz * 0.3)
+            local badge = object(
+                "Completed door " .. day,
+                mesh(MissionPacks[day] and MissionPacks[day].ornament or "bell"),
+                x + ix * 0.3,
+                3.1,
+                z + iz * 0.3
+            )
             scale(badge, 0.65, 0.65, 0.65)
         end
     end
@@ -339,7 +345,10 @@ function W.update(g, dt)
             end
             eng.scene.set_pocket(e, W.pockets[p.space] or 0)
             eng.scene.set_pocket(W.friendShadows[i], W.pockets[p.space] or 0)
-            pos(e, x + (p.x - x) * blend, 1, z + (p.z - z) * blend)
+            local tiny = p.tiny and r.instances[p.space] and r.instances[p.space].progress == 15
+            local height = tiny and 0.36 or 1
+            scale(e, height, height, height)
+            pos(e, x + (p.x - x) * blend, height, z + (p.z - z) * blend)
             rot(e, 0, p.yaw + 180, 0)
         else
             pos(e, 0, -40, 0)
@@ -381,12 +390,13 @@ function W.update(g, dt)
     local yaw, pitch = math.rad(g.yaw), math.rad(g.pitch)
     local fx, fy, fz = -math.sin(yaw) * math.cos(pitch), math.sin(pitch), -math.cos(yaw) * math.cos(pitch)
     local gun = W.gun
-    if W.selected ~= g.weapon then
+    if W.selected ~= g.weapon and not (MissionPacks[g.space] and MissionPacks[g.space].render) then
         eng.scene.set_mesh(
             gun,
             mesh(Hall.weapons[g.weapon].file),
             { tex = W.palette, roughness = 0.72, emissive = 0.06 }
         )
+        scale(gun, 0.56, 0.56, 0.56)
         W.selected = g.weapon
     end
     eng.scene.set_pocket(gun, W.pockets[g.space] or 0)
@@ -409,7 +419,20 @@ function W.update(g, dt)
         )
         rot(gun, g.pitch + g.recoil * 50, g.yaw, 0)
     end
-    eng.camera.set(g.x, g.xr and 0 or 1.55, g.z, g.xr and 0 or g.pitch, g.yaw, 0, W.pockets[g.space] or 0)
+    local pack = MissionPacks[g.space]
+    local eye = 1.55
+    if pack and pack.render then
+        eye = pack.render(g, dt)
+    end
+    eng.camera.set(
+        g.x,
+        g.xr and eye - 1.55 or eye,
+        g.z,
+        g.xr and 0 or g.pitch,
+        g.yaw,
+        0,
+        W.pockets[g.space] or 0
+    )
     if g.menu and not g.xr then
         pos(gun, 0, -40, 0)
         eng.camera.look_at(-6, 2.35, 13, -3, 3.0, 0)
@@ -417,6 +440,10 @@ function W.update(g, dt)
 end
 function W.sprites(g)
     if g.space ~= 0 then
+        local pack = MissionPacks[g.space]
+        if pack and pack.sprites then
+            pack.sprites(g)
+        end
         return
     end
     local f = g.feedback

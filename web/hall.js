@@ -269,9 +269,12 @@ stick.onpointerdown = (e) => {
 stick.onpointermove = (e) => {
   if (e.pointerId === moving) move(e);
 };
-stick.onpointerup = stick.onpointercancel = stick.onlostpointercapture = (e) => {
-  if (e.pointerId === moving) releaseMove();
-};
+stick.onpointerup =
+  stick.onpointercancel =
+  stick.onlostpointercapture =
+    (e) => {
+      if (e.pointerId === moving) releaseMove();
+    };
 const lookTaps = new LookTaps();
 canvas.addEventListener("pointerdown", (e) => {
   if (e.pointerType === "mouse" || !ready || document.body.dataset.mode !== "play") return;
@@ -294,13 +297,16 @@ canvas.addEventListener("pointermove", (e) => {
   px = e.clientX;
   py = e.clientY;
 });
-canvas.onpointerup = canvas.onpointercancel = canvas.onlostpointercapture = (e) => {
-  if (e.pointerId !== looking) return;
-  if (e.type === "pointerup") lookTaps.up(e);
-  else lookTaps.reset();
-  pointerFire(looking, false);
-  looking = null;
-};
+canvas.onpointerup =
+  canvas.onpointercancel =
+  canvas.onlostpointercapture =
+    (e) => {
+      if (e.pointerId !== looking) return;
+      if (e.type === "pointerup") lookTaps.up(e);
+      else lookTaps.reset();
+      pointerFire(looking, false);
+      looking = null;
+    };
 function resetInput() {
   releaseMove();
   looking = null;
@@ -356,12 +362,18 @@ function updateHUD(text) {
     date,
     rear,
     motion,
+    missionTools,
+    unlocked,
+    hearts,
+    stage,
   ] = text.split("|");
   if (lastOrnaments !== undefined && lastOrnaments !== ornaments) persist();
   lastOrnaments = ornaments;
   $("weaponName").textContent = weapon;
-  $("bells").textContent = bells;
-  $("visitors").textContent = visitors;
+  $("bells").textContent = missionTools ? hearts : bells;
+  $("bellsLabel").textContent = missionTools ? "hearts" : "bells";
+  $("visitors").textContent = missionTools ? stage + "/20" : visitors;
+  $("visitorsLabel").textContent = missionTools ? "stage" : "visitors";
   $("days").textContent = days;
   $("connection").textContent = connection + (connection === "Live room" ? " · " + players + "/8" : "");
   $("hint").textContent = hint;
@@ -384,8 +396,16 @@ function updateHUD(text) {
     .join(" · ");
   if ($("feedbackText").textContent !== notice) $("feedbackText").textContent = notice;
   $("practice").hidden = Number(visitors) > 0;
-  for (const b of document.querySelectorAll("[data-weapon]"))
+  for (const b of document.querySelectorAll("[data-weapon]")) {
+    b.dataset.hallName ??= b.getAttribute("aria-label");
+    const name = missionTools ? missionTools.split(",")[Number(b.dataset.weapon) - 1] : b.dataset.hallName;
+    b.setAttribute("aria-label", name);
+    b.title = name;
+    if (missionTools) b.dataset.short = ["POP", "ICE", "RPG", "MINI", "TWIN"][Number(b.dataset.weapon) - 1];
+    else delete b.dataset.short;
+    b.disabled = !!missionTools && Number(b.dataset.weapon) > Number(unlocked);
     b.classList.toggle("selected", b.dataset.weapon === number);
+  }
 }
 async function fileIntoFS(path) {
   const response = await fetch(path);
@@ -433,6 +453,11 @@ var Module = {
         room: params.get("room") || saved.room || config.room || "friends",
       };
       const args = ["--root", "/"];
+      const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+      if (loopback && params.get("preview") === "day1") {
+        Module.FS.mkdirTree("/preview-clock");
+        args.push("--fixture", "/preview-clock", "--test-clock", "1796079600");
+      }
       if (settings.endpoint) args.push("--endpoint", settings.endpoint, "--room", settings.room);
       Module.callMain(args);
       ready = true;

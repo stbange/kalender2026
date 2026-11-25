@@ -77,7 +77,11 @@ function H.near_door(x, z, range)
         end
     end
 end
-function H.move(x, z, dx, dz, space)
+function H.move(x, z, dx, dz, space, run, player)
+    local pack = MissionPacks and MissionPacks[space]
+    if run and pack and pack.move then
+        return pack.move(x, z, dx, dz, run, player)
+    end
     local limit = space == 0 and H.limit or 7.5
     x, z = H.clamp(x + dx, -limit, limit), H.clamp(z + dz, -limit, limit)
     if space == 0 and x < -21.20 and math.abs(z) < 2.36 then
@@ -410,6 +414,11 @@ function H.step(r, elapsed)
     local dt = H.clamp(elapsed, 0, 0.25)
     r.time = r.time + dt
     visitors(r, dt)
+    for _, run in pairs(r.instances) do
+        if run.pack.step and not run.done then
+            run.pack.step(run, r, dt)
+        end
+    end
     while dt > 0.000001 do
         local delta = math.min(dt, 0.015)
         for i = #r.shots, 1, -1 do

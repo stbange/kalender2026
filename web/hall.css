@@ -223,6 +223,20 @@ body[data-mode="play"] .brand {
 .readout span {
   padding: 8px 10px;
 }
+.readout em {
+  font-style: normal;
+}
+.rack button[data-short]::after {
+  content: attr(data-short);
+  font: bold 11px monospace;
+  color: var(--cream);
+}
+.rack button[data-short] img {
+  display: none;
+}
+.rack button:disabled {
+  opacity: 0.55;
+}
 .readout b {
   color: var(--gold);
 }

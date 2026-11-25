@@ -113,6 +113,10 @@ end
 function host_weapon(w)
     local g = game.state
     local nextTool = 1 + ((w or g.weapon + 1) - 1) % 5
+    local pack = MissionPacks[g.space]
+    if pack and pack.unlocked then
+        nextTool = 1 + (nextTool - 1) % pack.unlocked(g.room.instances[g.space])
+    end
     if nextTool ~= g.weapon then
         Feedback.switch(g)
         g.weapon = nextTool
@@ -157,8 +161,13 @@ local function fire(g)
             Hall.clamp(a.oz, -1, 1)
         )
     )
-    Feedback.shot(g, a)
-    g.nextFire = g.clock + Hall.weapons[g.weapon].delay
+    local pack = MissionPacks[g.space]
+    if pack and pack.presentShot then
+        pack.presentShot(g, a)
+    else
+        Feedback.shot(g, a)
+    end
+    g.nextFire = g.clock + (pack and pack.delays and pack.delays[g.weapon] or Hall.weapons[g.weapon].delay)
 end
 function host_pack_ready(day, ok)
     local g = game.state
@@ -217,8 +226,22 @@ function update(dt)
     g.yaw = g.yaw % 360
     dx, dz =
         dx + (HostMoveX or 0) * Hall.walk_speed(r, p) * dt, dz + (HostMoveZ or 0) * Hall.walk_speed(r, p) * dt
+    local pack = MissionPacks[g.space]
+    local run = r.instances[g.space]
+    if pack and pack.move then
+        if not g.online and (g.x ~= p.x or g.z ~= p.z) then
+            g.x, g.z = p.x, p.z
+        end
+        local unlocked = pack.unlocked(run)
+        if g.lastUnlock ~= unlocked then
+            g.weapon = unlocked
+            g.lastUnlock = unlocked
+        end
+    else
+        g.lastUnlock = nil
+    end
     local oldX, oldZ = g.x, g.z
-    g.x, g.z = Hall.move(g.x, g.z, dx, dz, g.space)
+    g.x, g.z = Hall.move(g.x, g.z, dx, dz, g.space, run, p)
     Feedback.walk(g, g.x - oldX, g.z - oldZ)
     if not g.online then
         p.x, p.z, p.yaw = g.x, g.z, g.yaw
@@ -259,15 +282,34 @@ function update(dt)
             command(g, "BELL")
         end
     else
-        if g.z > 6.4 and g.clock > g.doorGuard then
+        if (g.z > 6.4 or (pack and pack.atExit and pack.atExit(run, p))) and g.clock > g.doorGuard then
             command(g, "BACK")
             g.doorGuard = g.clock + 0.6
+        elseif pack and pack.fire then
+            if use then
+                if run.done and pack.canReturn(run, p) then
+                    command(g, "BACK")
+                else
+                    command(g, "USE")
+                end
+            end
+            local held = eng.input.down("fire")
+            if held and (g.weapon ~= 1 or not g.triggerHeld) and g.clock >= g.nextFire then
+                fire(g)
+            end
+            g.triggerHeld = held
+            if not held then
+                Feedback.endBurst(g)
+            end
         elseif use or eng.input.pressed("fire") then
             command(g, "USE")
         end
     end
     if not g.online and g.space ~= p.space then
         g.x, g.z, g.yaw, g.space, g.doorGuard = p.x, p.z, p.yaw, p.space, g.clock + 0.65
+    end
+    if g.space == 0 then
+        g.triggerHeld = nil
     end
     apply_award(g, p)
     Feedback.tick(g)
@@ -288,7 +330,9 @@ function host_hud()
     local hint = ""
     if g.space > 0 then
         local run = r.instances[g.space]
-        hint = run and run.done and "Ornament earned · walk back through the door"
+        local pack = MissionPacks[g.space]
+        hint = run and pack and pack.hint and pack.hint(run, r.players[g.id])
+            or run and run.done and "Ornament earned · walk back through the door"
             or "Use the objective · return through the doorway"
     else
         local day = Hall.near_door(g.x, g.z, 4)
@@ -312,7 +356,8 @@ function host_hud()
         hint = "Loading door " .. g.loadingDay
     end
     return table.concat({
-        Hall.weapons[g.weapon].name,
+        MissionPacks[g.space] and MissionPacks[g.space].tools and MissionPacks[g.space].tools[g.weapon]
+            or Hall.weapons[g.weapon].name,
         g.weapon,
         r.hits,
         alive,
@@ -324,13 +369,23 @@ function host_hud()
         g.space,
         g.awards,
         Feedback.hud(g),
+        MissionPacks[g.space] and MissionPacks[g.space].tools and table.concat(
+            MissionPacks[g.space].tools,
+            ","
+        ) or "",
+        MissionPacks[g.space] and MissionPacks[g.space].unlocked and MissionPacks[g.space].unlocked(
+            r.instances[g.space]
+        ) or 5,
+        r.players[g.id] and r.players[g.id].vital or "",
+        r.instances[g.space] and r.instances[g.space].progress or "",
     }, "|")
 end
 function draw()
     local g = game.state
     World.sprites(g)
     local h = host_hud()
-    local w = Hall.weapons[g.weapon]
+    local pack = MissionPacks[g.space]
+    local name = pack and pack.tools and pack.tools[g.weapon] or Hall.weapons[g.weapon].name
     local f = g.feedback
     if f.slow then
         eng.render.draw_text("Slowed", 40, 112, 1)
@@ -347,7 +402,16 @@ function draw()
         eng.render.draw_text(f.dayText, 18, 198, 1)
     end
     eng.render.draw_text(
-        string.format("%d  %s    |    bells %d    |    wave %d", g.weapon, w.name, g.room.hits, g.room.wave),
+        pack
+                and pack.tools
+                and ("DAY 01   /   " .. name .. "   /   Snow hearts " .. (g.room.players[g.id].vital or 5))
+            or string.format(
+                "%d  %s    |    bells %d    |    wave %d",
+                g.weapon,
+                name,
+                g.room.hits,
+                g.room.wave
+            ),
         18,
         18,
         1

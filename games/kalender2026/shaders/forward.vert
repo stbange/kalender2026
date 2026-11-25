@@ -48,7 +48,7 @@ void main() {
     v_color = a_color;
     v_cast_lamp = -1;
     // A shadow child inherits the body or joint's complete animated transform.
-    if (u_mat_mr.x < -2.5) {
+    if (u_mat_mr.x < -2.5 && u_mat_mr.x > -3.5) {
         if (model[3].y < -3.0 || u_light_count < 2 || u_light_pos_type[0].w < 0.5) {
             gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
             return;

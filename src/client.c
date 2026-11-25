@@ -26,7 +26,7 @@ static struct {
     char hello[128];
     char active_endpoint[384], active_room[33];
     bool headless, failed, xr;
-    time_t utc;
+    time_t utc, fixture_clock;
     float look_x, look_y;
     hall_settings settings;
 } app;
@@ -299,7 +299,7 @@ static void frame(void)
         eng_input_inject_mouse_delta(input, app.look_x, app.look_y);
         app.look_x = app.look_y = 0;
     }
-    time_t now = time(NULL);
+    time_t now = app.fixture_clock ? app.fixture_clock : time(NULL);
     if (now != app.utc) {
         app.utc = now;
         hall_utc(app.rt, now);
@@ -435,6 +435,7 @@ int hall_client(eng_runtime_t *rt, const hall_options *opts)
 {
     app.rt = rt;
     app.headless = opts->headless;
+    app.fixture_clock = opts->fixture_clock;
     app.ca_pem = opts->ca_pem;
     app.preferences = false;
     app.preference_row = 0;
