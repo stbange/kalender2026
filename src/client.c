@@ -439,6 +439,14 @@ int hall_client(eng_runtime_t *rt, const hall_options *opts)
     app.preferences = false;
     app.preference_row = 0;
     eng_input_t *input = eng_runtime_input(rt);
+#ifdef __EMSCRIPTEN__
+    /* The Web shell owns touch sticks, aiming and firing. A finger can also synthesize a left click. */
+    SDL_SetEventEnabled(SDL_EVENT_FINGER_DOWN, false);
+    SDL_SetEventEnabled(SDL_EVENT_FINGER_MOTION, false);
+    SDL_SetEventEnabled(SDL_EVENT_FINGER_UP, false);
+    SDL_SetEventEnabled(SDL_EVENT_FINGER_CANCELED, false);
+    eng_input_bind_mouse_button(input, "fire", 0);
+#endif
     for (int i = 0; i < 5; i++) {
         char action[8];
         snprintf(action, sizeof(action), "tool%d", i + 1);

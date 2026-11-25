@@ -20,6 +20,7 @@ function action(name, on) {
   if (ready) call("action", ["string", "number"], [name, Number(on)]);
 }
 function menu(show) {
+  resetInput();
   if (ready) call("menu", ["number"], [Number(show)]);
   document.body.dataset.mode = show ? "menu" : "play";
   $("menu").hidden = show;
@@ -206,26 +207,33 @@ document.addEventListener("mousemove", (e) => {
   if (ready && !touch && document.pointerLockElement === canvas)
     call("look", ["number", "number"], [e.movementX, e.movementY]);
 });
+const firePointers = new Set();
+function pointerFire(id, down) {
+  if (down) firePointers.add(id);
+  else if (!firePointers.delete(id)) return;
+  action("fire", firePointers.size > 0);
+}
 canvas.addEventListener("pointerdown", (e) => {
-  if (!touch && document.body.dataset.mode === "play" && e.button === 0) action("fire", true);
+  if (e.pointerType === "mouse" && document.body.dataset.mode === "play" && e.button === 0)
+    pointerFire(e.pointerId, true);
 });
 window.addEventListener("pointerup", (e) => {
-  if (!touch && e.button === 0) action("fire", false);
+  if (e.pointerType === "mouse" && e.button === 0) pointerFire(e.pointerId, false);
 });
 $("practice").onclick = () => tap("practice");
 for (const b of document.querySelectorAll("[data-weapon]"))
   b.onclick = () => call("choose", ["number"], [Number(b.dataset.weapon)]);
-function bindButton(id, name) {
+function bindButton(id, press) {
   const b = $(id);
   b.onpointerdown = (e) => {
     e.preventDefault();
     b.setPointerCapture(e.pointerId);
-    action(name, true);
+    press(e.pointerId, true);
   };
-  b.onpointerup = b.onpointercancel = b.onlostpointercapture = () => action(name, false);
+  b.onpointerup = b.onpointercancel = b.onlostpointercapture = (e) => press(e.pointerId, false);
 }
-bindButton("fire", "fire");
-bindButton("use", "interact");
+bindButton("fire", pointerFire);
+bindButton("use", (_, down) => action("interact", down));
 let moving = null,
   looking = null,
   px = 0,
@@ -261,32 +269,51 @@ stick.onpointerdown = (e) => {
 stick.onpointermove = (e) => {
   if (e.pointerId === moving) move(e);
 };
-stick.onpointerup = stick.onpointercancel = stick.onlostpointercapture = releaseMove;
+stick.onpointerup = stick.onpointercancel = stick.onlostpointercapture = (e) => {
+  if (e.pointerId === moving) releaseMove();
+};
+const lookTaps = new LookTaps();
 canvas.addEventListener("pointerdown", (e) => {
-  if (!touch || looking !== null || document.body.dataset.mode !== "play") return;
+  if (e.pointerType === "mouse" || !ready || document.body.dataset.mode !== "play") return;
   e.preventDefault();
+  if (looking !== null) {
+    lookTaps.reset();
+    return;
+  }
   looking = e.pointerId;
   px = e.clientX;
   py = e.clientY;
   canvas.setPointerCapture(looking);
-  if (ready) call("lock", ["number"], [1]);
+  call("lock", ["number"], [1]);
+  if (lookTaps.down(e)) pointerFire(looking, true);
 });
 canvas.addEventListener("pointermove", (e) => {
-  if (e.pointerId !== looking || !ready) return;
+  if (e.pointerId !== looking) return;
+  lookTaps.move(e);
   call("look", ["number", "number"], [e.clientX - px, e.clientY - py]);
   px = e.clientX;
   py = e.clientY;
 });
+canvas.onpointerup = canvas.onpointercancel = canvas.onlostpointercapture = (e) => {
+  if (e.pointerId !== looking) return;
+  if (e.type === "pointerup") lookTaps.up(e);
+  else lookTaps.reset();
+  pointerFire(looking, false);
+  looking = null;
+};
 function resetInput() {
   releaseMove();
   looking = null;
+  lookTaps.reset();
+  firePointers.clear();
   for (const name of ["fire", "interact", "practice"]) action(name, false);
 }
-canvas.onpointerup = canvas.onpointercancel = () => {
-  looking = null;
-};
 window.addEventListener("blur", resetInput);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) resetInput();
+});
 window.addEventListener("pagehide", () => {
+  resetInput();
   if (ready) call("connect", ["string", "string"], ["", "friends"], "number");
 });
 window.addEventListener("pageshow", (e) => {

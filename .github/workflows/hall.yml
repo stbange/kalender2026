@@ -29,7 +29,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y ninja-build lua5.1 xvfb libgl-dev libegl-dev openssl libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev
           pip install gcovr==8.8 'websockets>=15,<18' playwright pillow
-          python -m playwright install --with-deps chromium
+          python -m playwright install --with-deps chromium webkit
           npm install -g @fission-ai/openspec
       - uses: libsdl-org/setup-sdl@v1
         with:
@@ -53,6 +53,7 @@ jobs:
           mkdir reports
           gcovr --root . --filter "$PWD/src/" --filter "$PWD/server/" --fail-under-line 95 --txt reports/c-units.txt --print-summary build-cov
           python tests/lua_coverage.py | tee reports/lua-units.txt
+          node --test --experimental-test-coverage --test-coverage-include=web/look-taps.js --test-coverage-lines=95 tests/look_taps.cjs
           python tests/coverage_guard.py
           python tests/feedback_art_test.py
           python tests/holiday_art_test.py
@@ -79,6 +80,7 @@ jobs:
           cmake --build build-web -j4
           python tools/package.py --web --build build-web --out dist/web
           python tests/browser_smoke.py --site dist/web --binary build/lantern
+          python tests/touch_fire.py --site dist/web
           python tests/content_test.py --binary build/lantern --web-build build-web
           python tests/visual_check.py --site dist/web --out reports/views
           python tests/holiday_scene.py --site dist/web --out reports/views/winter

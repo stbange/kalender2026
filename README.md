@@ -16,8 +16,8 @@ Unpack the whole native archive and run `lantern.exe` or `./lantern`. The Web ed
 
 | Action | Desktop | Touch | Quest 3 |
 | --- | --- | --- | --- |
-| Walk and look | WASD / arrows and mouse | Left stick and right-side drag | Left stick and head tracking, right stick to snap-turn |
-| Throw | Left mouse button | Fire | Right trigger |
+| Walk and look | WASD / arrows and mouse | Left stick to move, drag the open screen to aim | Left stick and head tracking, right stick to snap-turn |
+| Throw | Left mouse button | Tap Fire or double-tap the look area. Hold the second tap to keep firing while aiming. | Right trigger |
 | Select a snowcaster | 1–5 or Q | Tap a tool | Right grip |
 | Use objective | E | Use | A |
 | Ring the practice bell | R | Ring bell, or Use at the range | B |
@@ -37,7 +37,7 @@ Open **Feedback** in the Web menu or press **F3** in the native game to change m
 
 ## Host a room on Linux
 
-Use the **0.4.0** room service and clients together for matching hall geometry. The game uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
+The **0.4.1** client works with the 0.4.0 and 0.4.1 room services. The game uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
 
 1. Point a domain at the host. Allow inbound TCP on ports 80 and 443 for Caddy's HTTPS certificate and WebSocket traffic. Keep port 8787 private.
 2. Install [Caddy](https://caddyserver.com/docs/install), replace the example domain in [hosting/Caddyfile](hosting/Caddyfile) and use it as the Caddy configuration. Caddy terminates TLS and proxies WebSocket upgrades.
@@ -86,6 +86,7 @@ Use `start(run)` for the shared instance, `act(run, player)` for authoritative i
 
 ```sh
 python3 -m pip install gcovr websockets playwright pillow
+python3 -m playwright install --with-deps chromium webkit
 npm install -g @fission-ai/openspec
 openspec validate --all --strict
 cmake -S . -B build-cov -G Ninja -DHALL_COVERAGE=ON
@@ -93,8 +94,10 @@ cmake --build build-cov
 ctest --test-dir build-cov -R '^hall_units$' --output-on-failure
 gcovr --root . --filter 'src/' --filter 'server/' --fail-under-line 95 build-cov
 python3 tests/lua_coverage.py
+node --test --experimental-test-coverage --test-coverage-include=web/look-taps.js --test-coverage-lines=95 tests/look_taps.cjs
 ctest --test-dir build-cov --output-on-failure
 python3 tests/browser_smoke.py --site dist/web --binary build-cov/lantern
+python3 tests/touch_fire.py --site dist/web
 ```
 
 The C coverage command uses a fresh instrumented build. Lua coverage requires Lua 5.1 and its compiler, and inventories every first-party gameplay script. The upstream tests and their independent coverage gate run under `engine/`. Main's workflow builds the Linux, Windows and Web archives, runs the headless playthrough, creates live WebSocket rooms, and exercises desktop, touch and stereo lifecycle in the browser before Pages deployment. Set the repository's **Settings → Pages → Source** to **GitHub Actions**. The operator chooses the public multiplayer hostname in-game.
