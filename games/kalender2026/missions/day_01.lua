@@ -792,7 +792,7 @@ end
 -- Client-only presentation. The dedicated service loads no artwork.
 local art, nodes, actors, eggs = {}, {}, {}, {}
 local gunArt = { "pistol", "freezer", "rocket", "shrinker", "twins" }
-local pocket
+local pocket, crewTexture
 local labels = {}
 local function place(name, model, x, y, z, size)
     local e = eng.scene.spawn(name)
@@ -808,6 +808,7 @@ local function place(name, model, x, y, z, size)
 end
 function M.build(space, pedestal)
     pocket = space
+    crewTexture = eng.asset.load_texture("missions/day_01/crew-hide.png", true)
     eng.scene.set_pos(pedestal, 0, -50, 0)
     for _, name in ipairs({
         "cinema",
@@ -822,7 +823,6 @@ function M.build(space, pedestal)
         "loader",
         "guard",
         "queen",
-        "hatchling",
         "cart",
         "rocket",
         "plywood",
@@ -883,7 +883,7 @@ function M.build(space, pedestal)
     eng.scene.set_scale(nodes.gate, 6, 3.7, 0.25)
     art.pistol = eng.asset.load_mesh("assets/pistol.glb")
 end
-local actorModels = { "usher", "courier", "skater", "loader", "guard", "queen", "hatchling" }
+local actorModels = { "usher", "courier", "skater", "loader", "guard", "queen" }
 -- The hip and shoulder pivots match the loose limb meshes made by make_day_one.py.
 local modelScale = { 1, 0.85, 1, 1.65, 1.3, 2.15, 0.53 }
 local strideRate = { 3.8, 4, 2.2, 2.8, 3.2, 1.8, 5.5 }
@@ -941,7 +941,8 @@ end
 local function animateActor(g, run, a, i, t, motion)
     local slot = actors[i]
     if not slot then
-        slot = { node = place("Dispatch crew", actorModels[a.kind], 0, -80, 0, 1), limbs = {} }
+        slot = { node = eng.scene.spawn("Dispatch crew"), limbs = {} }
+        eng.scene.set_pocket(slot.node, pocket)
         actors[i] = slot
     end
     local h = a.impact
@@ -949,22 +950,25 @@ local function animateActor(g, run, a, i, t, motion)
     local hit = math.max(0, 1 - age / 0.24)
     local frozen = a.ice > t
     local flash = hit > 0.55 and motion > 0 and g.feedback.prefs[2] > 25
-    local model = actorModels[a.kind]
+    local model = actorModels[a.kind] or "hatchling"
     local style = model .. tostring(frozen) .. tostring(flash) .. tostring(a.mascot)
     local scale = modelScale[a.kind]
     if slot.style ~= style then
         local material = {
-            tex = World.palette,
+            tex = crewTexture,
             metallic = -4,
             roughness = 0.82,
-            emissive = frozen and { 0.12, 0.35, 0.53 } or flash and { 0.34, 0.23, 0.10 } or 0.04,
+            emissive = frozen and { 0.12, 0.35, 0.53 } or flash and { 0.34, 0.23, 0.10 } or 0.002,
             color = a.mascot and { 0.55, 1, 0.75, 1 } or { 1, 1, 1, 1 },
         }
-        eng.scene.set_mesh(slot.node, art[model], material)
         if a.kind ~= 7 then
+            eng.scene.set_mesh(slot.node, art[model], material)
             for j = 1, 4 do
                 local leg = j <= 2
                 local part = model .. (leg and "-leg" or "-arm")
+                if j == 4 and (a.kind == 1 or a.kind == 2) then
+                    part = model .. "-armed"
+                end
                 art[part] = art[part] or eng.asset.load_mesh("missions/day_01/" .. part .. ".glb")
                 if not slot.limbs[j] then
                     slot.limbs[j] = place(part, part, 0, 0, 0, 1)

@@ -1,8 +1,6 @@
-The Lantern Hall 0.5.1 gives Day 1 a Snow Pistol from the rooftop onward. Tap Fire for one shot or hold it for a steady stream. Aim directly at the cinema latch and the striped target on the sideline cart.
+The Lantern Hall 0.5.2 gives Day 1 an original cast modeled after the silhouettes of Duke Nukem 3D. Look for the tusked rooftop patrol, the jetpack reptile and the single amber eye of the customs guard. The Queen has a swept crest, secondary claws and a raised tail. Her hatchlings crawl on animated feelers around a ring of teeth.
 
-Watch the ushers step, the skaters lean and the couriers hover. Shots make enemies recoil, frozen foes can shatter, and armored targets answer with a metallic knock. Nearby friends see the same impact.
-
-Install the matching Linux room service for co-op. Its catalog revision is `tinseltown-pistol-1`. Saved ornaments carry forward.
+This visual update works with the 0.5.1 Linux room and existing saved ornaments. The room revision is `tinseltown-pistol-1`.
 
 [Play on GitHub Pages](https://stbange.github.io/kalender2026/)
 

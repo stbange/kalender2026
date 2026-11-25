@@ -4,6 +4,7 @@ import argparse
 import shutil
 import time
 from pathlib import Path
+from PIL import Image
 from playwright.sync_api import sync_playwright
 from browser_smoke import website, open_game
 
@@ -124,6 +125,13 @@ if __name__ == "__main__":
     parser.add_argument("--site", type=Path, required=True)
     parser.add_argument("--capture", type=Path)
     args = parser.parse_args()
+    poses = set()
+    for frame in range(4):
+        path = args.site / f"games/kalender2026/missions/day_01/egg-{frame}.png"
+        with Image.open(path) as image:
+            assert image.mode == "RGBA" and image.getchannel("A").getextrema() == (0, 255), path
+            poses.add(image.tobytes())
+    assert len(poses) == 4, "The hatchling needs four distinct crawl poses"
     with website(args.site.resolve()) as url, sync_playwright() as pw:
         with pw.chromium.launch(
             executable_path=shutil.which("chromium"),

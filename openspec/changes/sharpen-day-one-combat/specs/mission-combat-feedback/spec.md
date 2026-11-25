@@ -18,3 +18,8 @@ Day 1 SHALL resolve direct fire against the nearest enemy in the aiming ray. The
 
 - **WHEN** a player drags once on the look area or holds a controller trigger
 - **THEN** the drag only aims, the held trigger repeats direct fire, and feedback leaves the camera under player control.
+
+#### Scenario: Identify the dispatch crew at combat distance
+
+- **WHEN** a player encounters a patrol boar, jetpack courier, diner skater, siege loader, customs guard, Queen or hatchling
+- **THEN** the creature's silhouette and anatomy identify its role. The six larger characters retain directional joint animation and the hatchling has an original four-frame sprite.
