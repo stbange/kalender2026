@@ -140,6 +140,13 @@ int main(int argc, char **argv)
     char *netfail[] = {"hall",     "--root", root, "--headless", "--ca", "/missing-calendar-ca.pem",
                        "--frames", "1"};
     assert(run(8, netfail) == 1);
+    char ca_path[1200];
+    snprintf(ca_path, sizeof(ca_path), "%s/unit-ca.pem", tmp);
+    netfail[5] = ca_path;
+    assert(SDL_SaveFile(ca_path, "", 0) && run(8, netfail) == 1);
+    const char pem_text[] = "-----BEGIN CERTIFICATE-----\r\n-----END CERTIFICATE-----\n";
+    assert(SDL_SaveFile(ca_path, pem_text, strlen(pem_text)) && run(8, netfail) == 0);
+    SDL_RemovePath(ca_path);
 
     eng_runtime_cfg_t cfg = eng_runtime_default_cfg();
     cfg.repo_root = engine_dir;

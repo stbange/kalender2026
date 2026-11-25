@@ -66,6 +66,8 @@ def test_identity(directory):
     )
     openssl("x509", "-req", "-in", request, "-CA", ca, "-CAkey", ca_key, "-CAcreateserial",
             "-days", "1", "-extfile", extensions, "-out", cert)
+    # Exercise the same Windows-exported trust file on every native platform.
+    ca.write_bytes(b"\r\n".join(ca.read_bytes().splitlines()) + b"\r\n")
     return cert, key, ca
 
 

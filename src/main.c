@@ -7,6 +7,23 @@
 
 static const char *next_arg(int *i, int argc, char **argv) { return *i + 1 < argc ? argv[++*i] : ""; }
 
+#ifndef __EMSCRIPTEN__
+static char *read_ca_pem(const char *path)
+{
+    char *pem = SDL_LoadFile(path, NULL);
+    if (pem) {
+        /* The engine's PEM reader expects LF even when openssl exports CRLF. */
+        char *out = pem;
+        for (const char *in = pem; *in; ++in) {
+            if (*in != '\r' || in[1] != '\n')
+                *out++ = *in;
+        }
+        *out = '\0';
+    }
+    return pem;
+}
+#endif
+
 int hall_run(int argc, char **argv)
 {
     hall_options o = {0};
@@ -82,7 +99,7 @@ int hall_run(int argc, char **argv)
     snprintf(ca, sizeof(ca), "%s/cacert.pem", o.root);
     if (!ca_file && SDL_GetPathInfo(ca, NULL))
         ca_file = ca;
-    char *ca_pem = ca_file ? SDL_LoadFile(ca_file, NULL) : NULL;
+    char *ca_pem = ca_file ? read_ca_pem(ca_file) : NULL;
     if (ca_file && (!ca_pem || !*ca_pem)) {
         fprintf(stderr, "Cannot read CA file: %s\n", ca_file);
         SDL_free(ca_pem);
