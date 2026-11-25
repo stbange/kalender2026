@@ -88,6 +88,12 @@ def check(browser, url, options, capture):
     page.wait_for_function(state + "[2]==='1'", timeout=60000)
     assert page.locator("#days").text_content() == "1"
     assert page.locator("#hint").text_content().startswith("Midnight cinema")
+    icons = page.locator(".rack [data-weapon] img")
+    page.wait_for_function("""() => [...document.querySelectorAll('.rack [data-weapon] img')].every(
+        image => image.currentSrc.includes('/day_01/rack-') && image.naturalWidth === 64)""")
+    names = [src.rsplit("/", 1)[-1] for src in icons.evaluate_all("images => images.map(i => i.currentSrc)")]
+    assert names == [f"rack-{gun}.png" for gun in ("sidearm", "freezer", "rpg", "shrinker", "twins")]
+    assert page.locator(".rack button:disabled").count() == 4
     assert len(art) >= 20 and all(s == 200 for s in art)
     x, y = page.viewport_size["width"] * 0.82, page.viewport_size["height"] * 0.53
     page.touchscreen.tap(x, y)

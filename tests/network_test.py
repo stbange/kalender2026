@@ -180,7 +180,7 @@ class HallConnection(ClientConnection):
         return message
 
 
-def hello(url, room="friends", revision="tinseltown-pistol-1", **kwargs):
+def hello(url, room="friends", revision="tinseltown-arcade-1", **kwargs):
     ws = connect(
         url,
         proxy=None,
@@ -216,7 +216,7 @@ def snapshot(ws, predicate, timeout=8):
             seats={},
             events=[],
             latest=0,
-            loads=[],
+            wave_number=0,
             mission_players={},
             actors=[],
         )
@@ -265,8 +265,8 @@ def snapshot(ws, predicate, timeout=8):
                         result=int(row[18]),
                     )
                 )
-            elif row[:3] == ["D", "1", "3"]:
-                state["loads"].append(row[3:])
+            elif row[:3] == ["D", "1", "0"]:
+                state["wave_number"] = int(row[8])
             elif row[:3] == ["D", "1", "2"]:
                 state["mission_players"][int(row[3])] = int(row[6])
             elif row[0] == "T":
@@ -294,7 +294,7 @@ def public_room(binary, root):
         url = f"ws://127.0.0.1:{port}"
         clients = []
 
-        def join(room="friends", revision="tinseltown-pistol-1"):
+        def join(room="friends", revision="tinseltown-arcade-1"):
             ws, answer = hello(url, room, revision)
             stack.callback(ws.close)
             return ws, answer
@@ -326,7 +326,7 @@ def public_room(binary, root):
         joined = snapshot(new, lambda s: s["hits"] == 1)
         assert joined["wave"] == 1 and joined["latest"] == bell["id"]
         assert joined["seats"][8] != s["seats"][8]
-        new.send("HELLO3 tinseltown-pistol-1 friends")
+        new.send("HELLO3 tinseltown-arcade-1 friends")
         assert len(snapshot(new, lambda s: True)["players"]) == 8
         with tempfile.TemporaryDirectory() as tmp, tls_proxy(port, tmp) as (secure, cert, names):
             witness, answer = join("native")
@@ -470,7 +470,7 @@ def last_launch(binary, root):
         for ws in clients[:2]:
             ws.send("USE")
         for ws in clients[:2]:
-            s = snapshot(ws, lambda s: s["players"][1]["progress"] == 2 and bool(s["loads"]))
+            s = snapshot(ws, lambda s: s["players"][1]["progress"] == 2 and s["wave_number"] == 1 and len(s["actors"]) >= 5)
             assert len(s["mission_players"]) == 7 and s["players"][8]["space"] == 0
         clients[0].send("F 2 1 0 0 -1")
         clients[1].send("F 1 1 0 0 -1")

@@ -62,28 +62,31 @@ local function find(kind)
         end
     end
 end
-local function jobs(phase)
-    for i = 1, 4 do
-        while m.inTransit(run) do
-            pos(run.loadX, run.loadZ + 1)
-            use()
-            -- Keep the escort clear while testing switch order and cargo travel.
-            for _, a in ipairs(run.actors) do
-                if a.kind <= 2 or a.kind == 7 then
-                    a.hp = 0
+local function clearRoom(phase)
+    local waves = phase == 16 and 4 or 3
+    for wave = 1, waves do
+        assert(run.wave == wave)
+        local stop = m.stops[phase]
+        pos(stop[3], stop[4])
+        use()
+        assert(run.progress == phase, "occupied exit must stay locked")
+        for _, a in ipairs(run.actors) do
+            pos(a.x, a.z + 0.25)
+            for shot = 1, 3 do
+                if a.hp > 0 then
+                    fire(1, a.x, a.z)
                 end
             end
-            Hall.step(r, 0.25)
+            assert(a.hp == 0)
         end
-        local x, z = m.destination(run)
-        pos(x, z + 1)
-        local tool = i == 2 and ({ [6] = 2, [9] = 3, [16] = 4 })[phase]
-        if tool then
-            fire(tool, x, z)
-        else
+        if wave < waves then
+            pos(stop[3], stop[4])
             use()
+            assert(run.progress == phase)
+            tick(9)
+            local remote = assert(Net.read(Net.snapshot(r))).instances[1]
+            assert(remote.wave == wave + 1 and #remote.actors == #run.actors)
         end
-        assert(run.job == i, phase .. "-" .. i)
     end
 end
 -- Observe actual shoulder and hip transforms on the two opening ushers.
@@ -115,11 +118,9 @@ do
     eng.scene.set_parent, eng.scene.set_rot_deg = parent, rotate
 end
 
--- Internal barriers and entrances permit sliding around walls.
-local x, z = m.move(34, -21, 1, 0, run, p)
-assert(x == 35)
-x, z = m.move(78.5, -21, 0.8, 0, run, p)
-assert(x == 78.5)
+-- Solid room walls guide players to the central opening.
+local x, z = m.move(13, -9, 2, 0, run, p)
+assert(x == 13.4)
 x, z = m.move(0, 5, 0, 1, run, p)
 assert(z == 6)
 pos(-11, -27)
@@ -147,8 +148,17 @@ for phase = 1, #m.stops do
             fire(1, a.x, a.z)
             sync()
             assert(a.hp == 0 and a.impact.result == 2 and g.feedback.mark == "finish")
+            local nearby = find(2)
+            nearby.x, nearby.z = -5, -23
+            pos(-4, -20)
+            fire(1, -4, -22)
+            assert(nearby.hp == 0 and math.floor(run.secrets / 4) % 2 == 1)
+            assert(assert(Net.read(Net.snapshot(r))).instances[1].secrets == run.secrets)
+            sync()
+            assert(m.move(15, -23, 1, 0, run, p) == 16)
+            assert(m.move(28, -23, 3, 0, run, p) == 28.55)
         end
-        jobs(phase)
+        clearRoom(phase)
     end
     pos(s[3], s[4] + 1)
     if phase == 3 or phase == 19 then
@@ -179,13 +189,7 @@ for phase = 1, #m.stops do
         pos(a.x + 1.5, a.z)
         fire(2, a.x, a.z)
         use()
-        tick(12)
-        assert(not run.slide and run.progress == 4)
-        pos(a.x, a.z + 1.5)
-        fire(2, a.x, a.z)
-        assert(a.ice > run.clock)
-        use()
-        tick(24)
+        tick(32)
         assert(run.progress == 5)
     elseif phase == 8 then
         local late = join(3)

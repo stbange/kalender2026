@@ -401,7 +401,16 @@ function updateHUD(text) {
     const name = missionTools ? missionTools.split(",")[Number(b.dataset.weapon) - 1] : b.dataset.hallName;
     b.setAttribute("aria-label", name);
     b.title = name;
-    if (missionTools) b.dataset.short = ["PST", "ICE", "RPG", "MINI", "TWIN"][Number(b.dataset.weapon) - 1];
+    const icon = b.querySelector("img");
+    icon.dataset.hallSrc ??= icon.getAttribute("src");
+    const missionGun = ["sidearm", "freezer", "rpg", "shrinker", "twins"][Number(b.dataset.weapon) - 1];
+    const src =
+      space === "1" && missionTools
+        ? "games/kalender2026/missions/day_01/rack-" + missionGun + ".png"
+        : icon.dataset.hallSrc;
+    if (icon.getAttribute("src") !== src) icon.setAttribute("src", src);
+    if (missionTools && space !== "1")
+      b.dataset.short = ["PST", "ICE", "RPG", "MINI", "TWIN"][Number(b.dataset.weapon) - 1];
     else delete b.dataset.short;
     b.disabled = !!missionTools && Number(b.dataset.weapon) > Number(unlocked);
     b.classList.toggle("selected", b.dataset.weapon === number);

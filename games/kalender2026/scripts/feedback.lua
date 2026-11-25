@@ -35,6 +35,8 @@ Feedback = {
         "throw",
         "bell",
         "poof",
+        "d1-slide",
+        "d1-launch",
         "d1-freeze",
         "d1-shrink",
         "d1-twins",

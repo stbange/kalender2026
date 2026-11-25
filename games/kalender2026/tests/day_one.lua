@@ -1,25 +1,8 @@
 -- Deterministic, no teleports. Drive the shipping solo input loop through Door 1.
 local phaseAt, phaseSeen, launchWait = 0, 0, 0
-local wings = { [2] = { 1, -21 }, [6] = { -1, -80 }, [9] = { -1, -125 }, [16] = { 1, -234 } }
+local defeats = {}
 local edges = { -41, -97, -143, -168, -253 }
-local function path(x, z, tx, tz, wing)
-    if wing then
-        local side, center = wing[1], wing[2]
-        local a, b = x * side, tx * side
-        local walls = { { 14, 0 }, { 14 + 23 * 2.85, -8 }, { 14 + 42 * 2.85, 8 }, { 14 + 61 * 2.85, -8 } }
-        if a > b then
-            walls = { walls[4], walls[3], walls[2], walls[1] }
-        end
-        for _, wall in ipairs(walls) do
-            local u, v = wall[1], center + wall[2]
-            if (a < u + 1.2 and b > u + 2) or (a > u - 1.2 and b < u - 2) then
-                if math.abs(z - v) > 1.2 then
-                    return (a < b and u - 2.1 or u + 2.1) * side, v
-                end
-                return (a < b and u + 2.6 or u - 2.6) * side, v
-            end
-        end
-    end
+local function path(x, z, tx, tz)
     for _, edge in ipairs(edges) do
         if z > edge - 0.8 and tz < edge - 1 then
             if math.abs(x) > 1.8 then
@@ -65,6 +48,11 @@ function playtest_frame(f)
     local m = MissionPacks[1]
     local run = g.room.instances[1]
     local p = g.room.players[g.id]
+    for _, a in ipairs(run.actors) do
+        if a.hp == 0 then
+            defeats[a.id] = true
+        end
+    end
     local k = run.progress
     if k ~= phaseSeen then
         phaseSeen, phaseAt = k, f
@@ -72,8 +60,7 @@ function playtest_frame(f)
     if f - phaseAt > 32000 then
         error("No progress at " .. m.hint(run, p) .. " position " .. g.x .. "," .. g.z)
     end
-    local x, z = m.destination(run)
-    local wing = wings[k]
+    local x, z = m.destination(run, p)
     local function action()
         eng.input.inject("interact", f % 3 == 0)
     end
@@ -125,26 +112,28 @@ function playtest_frame(f)
         end
     end
     if k == 18 then
-        local ax, az = path(g.x, g.z, x, z + 0.5)
-        walk(g, ax, az, 0.35)
         for _, a in ipairs(run.actors) do
-            if a.kind == 7 and a.hp > 0 and (a.x - g.x) ^ 2 + (a.z - g.z) ^ 2 < 100 then
-                eng.input.inject("up", false)
-                shot(5, a.x, a.z, true)
+            if a.kind == 7 and a.hp > 0 then
+                local ax, az = path(g.x, g.z, a.x, a.z + 2.2)
+                if walk(g, ax, az, 4) then
+                    shot(5, a.x, a.z, true)
+                end
                 return
             end
         end
-        return
-    end
-    local ax, az = path(g.x, g.z, x, z, wing)
-    if walk(g, ax, az, (ax == x and az == z) and 1.3 or 0.32) and (g.x - x) ^ 2 + (g.z - z) ^ 2 < 6 then
-        if wing and m.inTransit(run) then
-            action()
-        elseif wing and run.job == 1 and k ~= 2 then
-            shot(({ [6] = 2, [9] = 3, [16] = 4 })[k], x, z, true)
-        else
-            action()
+        for _, a in ipairs(run.actors) do
+            if a.kind == 6 then
+                local ax, az = path(g.x, g.z, a.x, a.z + 5)
+                if walk(g, ax, az, 5) then
+                    shot(5, a.x, a.z, true)
+                end
+                return
+            end
         end
+    end
+    local ax, az = path(g.x, g.z, x, z)
+    if walk(g, ax, az, (ax == x and az == z) and 1.3 or 0.32) and (g.x - x) ^ 2 + (g.z - z) ^ 2 < 6 then
+        action()
     end
     if k == 12 then
         launchWait = launchWait + 1
@@ -152,6 +141,12 @@ function playtest_frame(f)
 end
 function playtest_verify()
     local g = game.state
+    local total = 0
+    for _ in pairs(defeats) do
+        total = total + 1
+    end
+    eng.log.info(string.format("Day 1 route: %d enemies cleared, %d shots fired", total, g.seq))
+    eng.test.assert_true(eng, total >= 65, "The direct route sustains combat across all four shootouts")
     eng.log.info(string.format("Day 1 scripted solo route %.1f simulated minutes", g.clock / 60))
     eng.test.assert_eq(eng, phaseSeen, 20, "Reached the Moon Bowl finish")
     eng.test.assert_eq(eng, g.space, 0, "Walked back to the hall")

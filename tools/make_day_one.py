@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from make_dispatch_crew import build_crew
+from make_dispatch_sets import floor_tiles, sector_skins, weapons
 from voxel_model import Model
 
 ROOT = Path(__file__).resolve().parents[1] / "games/kalender2026/missions"
@@ -65,88 +66,84 @@ def room(i, front, back, width, floor, wall):
     m = Model()
     mid = (front + back) / 2
     m.box(0, -0.27, mid, width * 2, 0.5, front - back, floor)
-    # Wide side galleries feed the film archive, dispatch, control and hatchery.
-    wing = {
-        1: (1, -21, "FILM ARCHIVE"),
-        2: (-1, -80, "PARCEL EXCHANGE"),
-        3: (-1, -125, "LAUNCH CONTROL"),
-        5: (1, -234, "QUARANTINE"),
-    }.get(i)
-    if wing:
-        side, center, title = wing
-        m.transform = lambda x, y, z: (side * (14 + (x * side - 14) * 2.85), y, z)
-        m.box(side * 53, -0.26, center, 79, 0.5, 28, floor)
-        for v in (-14, 14):
-            m.box(side * 53, 2, center + v, 79, 4, 0.5, wall)
-        m.box(side * 92, 2, center, 0.6, 4, 28, wall)
-        for j in range(1, 4):
-            u = 18 + j * 19
-            gap = (-1) ** j * 8
-            for a, b in ((-14, gap - 3.4), (gap + 3.4, 14)):
-                m.box(u * side, 1.85, center + (a + b) / 2, 0.8, 3.7, b - a, wall)
-            m.box(u * side, 4, center, 0.8, 0.6, 28, 2)
-        sign(m, title, 24 * side, 3.5, center - 12, 14, wall)
-        for n, (u, v) in enumerate(((25, -9), (47, 9), (69, -9), (87, 8))):
-            x, z = u * side, center + v
-            m.box(x, 0.65, z, 2.4, 1.3, 1.3, wall)
-            m.box(x, 1.39, z, 1.8, 0.18, 0.82, 16)
-            sign(m, ("01", "02", "03", "04")[n], x, 1.9, z, 1.8, 1, 17)
-            for dz in (-5, 5):
-                if i == 1:
-                    for h in (0.3, 0.85, 1.4):
-                        m.cone(x + 3 * side, h, z + dz, 1.1, 1.1, 0.28, 3, 12)
-                elif i == 2:
-                    for h in (0.55, 1.65):
-                        m.box(x + 3 * side, h, z + dz, 1.8, 1.08, 2, 8)
-                        m.box(x + 3 * side, h, z + dz + 1.02, 0.23, 1.08, 0.08, 12)
-                elif i == 3:
-                    m.cone(x + 3 * side, 0, z + dz, 1.1, 1.1, 3.6, 2, 10)
-                    m.cone(x + 3 * side, 2.8, z + dz, 1.14, 1.14, 0.25, 15)
-                else:
-                    m.cone(x + 3 * side, 0, z + dz, 1, 1.28, 1.6, 20, 8)
-                    m.cone(x + 3 * side, 1.6, z + dz, 1.28, 0.1, 1.1, 22, 8)
-
-        m.transform = None
-        for u in range(17, 234, 7):
-            m.box(side * u, 0.01, center, 0.24, 0.06, 25, 3)
-            for dz in (-12, 12):
-                m.box(side * u, 2.7, center + dz, 0.4, 5.4, 0.5, 2)
-                m.box(side * u, 4.8, center + dz, 0.8, 0.4, 0.6, 17)
-        track = [
-            (14, 0),
-            (20, -4),
-            (25, -9),
-            (37, -8),
-            (42, 5),
-            (47, 9),
-            (56, 8),
-            (62, -4),
-            (69, -9),
-            (75, -8),
-            (81, 6),
-            (87, 8),
-        ]
-        for (a, b), (c, d) in zip(track, track[1:]):
-            for offset in (-0.65, 0.65):
-                m.beam(
-                    (side * (14 + (a - 14) * 2.85), 0.08, center + b + offset),
-                    (side * (14 + (c - 14) * 2.85), 0.08, center + d + offset),
-                    0.09,
-                    15,
-                )
+    # A single forward aisle leads through color-coded sector doors. The little
+    # press box at midfield is the only walk-in side room.
+    bays = {
+        1: (1, -23, 29, "MIDNIGHT ARCADE"),
+        2: (-1, -80, 33, "PARCEL SORTING"),
+        3: (-1, -124, 35, "LAUNCH CONTROL"),
+        5: (1, -233, 31, "SPECIMEN VAULT"),
+    }
+    bay = bays.get(i)
+    if bay:
+        side, center, outer, title = bay
+        x = side * (width + outer) / 2
+        span = outer - width
+        m.box(x, -0.27, center, span, 0.5, 20, floor)
+        m.box(x, 5.5, center, span, 0.4, 20, 23)
+        for end in (-1, 1):
+            m.box(x, 2.65, center + 10 * end, span, 5.3, 0.35, wall)
+        m.box(side * outer, 2.65, center, 0.35, 5.3, 20, wall)
+        sign(m, title, x, 3.65, center - 9.72, span - 2, 1, 17)
+        for j in range(4):
+            u = side * (outer - 2.3)
+            zz = center + 5.8 - j * 3.6
+            if i == 1:
+                m.box(u, 0.64, zz, 1.5, 1.28, 1.2, 11)
+                m.box(u, 1.77, zz, 1.6, 1.1, 1.16, 1)
+                m.box(u - side * 0.82, 1.8, zz, 0.07, 0.72, 0.91, [26, 22, 13, 30][j])
+                m.box(u - side * 0.86, 1.26, zz, 0.55, 0.13, 1.2, 3)
+            elif i == 2:
+                m.box(u - side * 1.3, 0.7, zz, 3.7, 1.4, 2, 7)
+                m.box(u - side * 1.3, 1.43, zz, 0.38, 0.09, 2.1, 16)
+            elif i == 3:
+                m.cone(u, 0, zz, 1.18, 1.18, 4.4, 3)
+                m.cone(u, 3, zz, 1.22, 1.22, 0.4, 12)
+            else:
+                m.cone(u, 0, zz, 0.94, 1.25, 1.3, 18, 9)
+                m.cone(u, 1.3, zz, 1.25, 0.1, 1.9, 29, 9)
+            m.box(side * (width + 1.0), 5.16, zz, 1.6, 0.18, 0.40, 26 if i != 5 else 22)
     for d in (-1, 1):
-        opening = wing[1] if wing and wing[0] == d else -261 if i == 6 and d == 1 else None
-        spans = [(back, opening - 3.3), (opening + 3.3, front)] if opening is not None else [(back, front)]
+        opening = -261 if i == 6 and d == 1 else None
+        half = 3.3
+        if bay and d == bay[0]:
+            opening, half = bay[1], 10
+        spans = [(back, opening - half), (opening + half, front)] if opening is not None else [(back, front)]
         for a, b in spans:
             m.box(d * (width + 0.15), 2, (a + b) / 2, 0.32, 4, b - a, wall)
         for z in range(back + 3, front, 6):
-            if opening is not None and abs(z - opening) < 3.3:
+            if opening is not None and abs(z - opening) < half:
                 continue
             m.box(d * (width - 0.15), 1.9, z, 0.52, 3.9, 0.5, 2)
             m.box(d * (width - 0.44), 2.9, z, 0.12, 0.45, 0.38, 17)
     for d in (-1, 1):
         m.box(d * (width + 3.5) / 2, 2, back, width - 3.5, 4, 0.5, wall)
     m.box(0, 4.35, back, 2 * width, 0.7, 0.5, wall)
+    trim = (12, 25, 15, 26, 20, 16)[i - 1]
+    for side in (-1, 1):
+        m.box(side * 3.45, 2.15, back + 0.34, 0.28, 4.3, 0.24, 2)
+        m.box(side * 3.44, 2.3, back + 0.50, 0.13, 2.8, 0.12, trim)
+    sign(
+        m,
+        ("DINER", "PAD 02", "BOARDING", "LUNA", "MOON BOWL", "HOME")[i - 1],
+        0,
+        4.44,
+        back + 0.31,
+        4.8,
+        1,
+        17,
+    )
+    for z in range(back + 3, front - 1, 8):
+        # Twin chevrons point north and leave the crosshair free.
+        for side in (-1, 1):
+            m.beam((side * 0.76, 0.075, z + 0.85), (side * 0.12, 0.075, z), 0.13, trim)
+    if i in (2, 4, 5):
+        ceiling = 5.8 if i == 4 else 6.2
+        m.box(0, ceiling, mid, width * 2, 0.25, front - back, 23 if i != 2 else 10)
+        for z in range(back + 3, front, 7):
+            m.box(0, ceiling - 0.18, z, width * 2, 0.28, 0.40, 2)
+            for side in (-1, 1):
+                m.box(side * width * 0.56, ceiling - 0.36, z, width * 0.41, 0.11, 0.22, 17 if i == 2 else 26)
     return m
 
 
@@ -164,9 +161,9 @@ def cinema():
                     m.box(x + a, h, z + 3.03, 0.7, 0.8, 0.08, 15 if (h + z) % 3 else 23)
     # A stepped nickel-plated marquee, velvet ticket windows and a winter skyline.
     for i in range(23):
-        x = (i - 11) * 5.3
+        x = (-1 if i % 2 == 0 else 1) * (40 + (i // 2 % 5) * 4.8)
         h = 5 + (i * 19) % 14
-        z = -50 - (i % 4) * 3.2
+        z = 7 - (i // 2) * 4.8
         m.box(x, h / 2, z, 4.5, h, 3.3, 1 if i % 3 else 23)
         for j in range(2, int(h), 2):
             for off in (-1.3, 0, 1.3):
@@ -186,8 +183,8 @@ def cinema():
     sign(m, "MOON BOWL", 0, 5.85, -11.30, 13, 11)
     for n in range(27):
         m.box(n * 0.52 - 6.8, 4.95, -11.8, 0.2, 0.2, 0.2, 17 if n % 2 else 13)
-    m.box(0, 3.3, -37, 15, 6.5, 0.6, 7)
-    m.box(0, 3.3, -36.65, 14, 5.8, 0.1, 4)
+    m.box(0, 5.6, -37, 15, 5.6, 0.6, 7)
+    m.box(0, 5.6, -36.65, 14, 5.1, 0.1, 4)
     for x in (-11, 11):
         m.box(x, 2.8, -36, 4, 5.6, 1.7, 11)
     for z in (-18, -22, -26):
@@ -200,11 +197,21 @@ def cinema():
     for x in range(-10, -5):
         m.box(x, 0.04, -9, 0.4, 0.05, 3, 3)
     m.cone(-11, 0.1, -27, 0.55, 0.7, 0.7, 4)
+    # Rooftop water tank, neon blade, fire escape and velvet proscenium.
+    m.cone(-10, 8.2, -5, 1.45, 1.45, 2.15, 7, 12)
+    m.cone(-10, 10.34, -5, 1.7, 0.05, 0.8, 3, 12)
+    for j in range(3):
+        m.box(9.2, 2.0 + j * 1.55, -3 - j * 1.4, 2.1, 0.12, 2.2, 2)
+        m.beam((8.35, 2.1 + j * 1.55, -2 - j * 1.4), (8.35, 3.65 + j * 1.55, -3.4 - j * 1.4), 0.1, 3)
+    sign(m, "MIDNIGHT CINEMA", -6.8, 7.7, -13.8, 7.4, 10, 13)
+    for side in (-1, 1):
+        for j in range(5):
+            m.cone(side * (7.8 + j * 0.37), 0, -35.4, 0.32, 0.38, 7.8, 11 if j % 2 else 12, 8)
     save(m, "cinema")
 
 
 def diner():
-    m = room(2, -41, -97, 14, 4, 24)
+    m = room(2, -41, -97, 14, 3, 24)
     for z in range(-95, -41, 2):
         for x in range(-12, 13, 2):
             if (x + z) % 4 == 1:
@@ -222,6 +229,14 @@ def diner():
             for y in (0.6, 1.9):
                 m.box(x, y, z, 2.4, 1.2, 2.1, 8)
                 m.box(x, y, z + 1.07, 0.38, 1.2, 0.05, 16)
+    # Chrome counter, soda taps and the magnetic service till.
+    m.box(-10.8, 0.58, -61, 2.1, 1.16, 8.0, 11)
+    m.box(-10.8, 1.18, -61, 2.25, 0.13, 8.12, 3)
+    for z in (-58, -60, -62, -64):
+        m.cone(-8.7, 0, z, 0.12, 0.12, 0.62, 3)
+        m.cone(-8.7, 0.62, z, 0.42, 0.42, 0.18, 12)
+    sign(m, "NO REFILLS ON LUNA", -8, 3.5, -61.5, 5.3, 10, 13)
+    sign(m, "RED PASS", 9, 2.1, -66.8, 2.5, 11, 17)
     save(m, "diner")
 
 
@@ -237,6 +252,11 @@ def silos():
         m.box(0, 0.04, z, 0.45, 0.05, 1.7, 16)
     rocket(m, 6, 0, -139, 2)
     sign(m, "EXPRESS  /  PAD 02", 0, 5, -139, 12, 23)
+    for side in (-1, 1):
+        x = side * 11
+        m.cone(x, 0, -111, 1.9, 1.9, 6.2, 3, 12)
+        for y in (1.2, 4.6, 5.1):
+            m.cone(x, y, -111, 1.94, 1.94, 0.22, 15, 12)
     save(m, "silos")
 
 
@@ -246,7 +266,8 @@ def flight():
         for x in (-5, 5):
             m.box(x, 2.4, z, 1, 3, 2.7, 24)
             m.box(x, 2.4, z + 1.38, 0.92, 2.2, 0.05, 0)
-    m.box(0, 2.5, -166, 10, 5, 0.4, 0)
+    m.box(-3.8, 2.5, -166, 3.8, 5, 0.4, 0)
+    m.box(3.8, 2.5, -166, 3.8, 5, 0.4, 0)
     for i in range(38):
         x = math.sin(i * 23.4) * 4.8
         y = (i * 1.393) % 3.8 + 0.5
@@ -277,6 +298,12 @@ def luna():
             m.cone(x, 0.1, z, 1.2, 0.9, 2.1, 20, 8)
             m.cone(x, 2.2, z, 0.9, 0.1, 0.85, 22, 8)
     sign(m, "ORNAMENT INCUBATOR", 0, 4.9, -235, 14, 18)
+    # Chitinous ribs creep in from the bulkheads; the central aisle stays open.
+    for z in (-227, -232, -237, -242, -247):
+        for side in (-1, 1):
+            m.beam((side * 12, 0, z), (side * 10, 3.7, z - 1), 0.52, 18)
+            m.beam((side * 10, 3.7, z - 1), (side * 6.5, 5.7, z - 1.6), 0.41, 20)
+            m.cone(side * 10, 0.1, z + 0.7, 0.65, 0.17, 1.8, 29, 8)
     save(m, "luna")
 
 
@@ -334,6 +361,22 @@ def props():
     prize.beam((-0.16, 1.85, 0), (0, 1.7, 0), 0.045, 16)
     prize.save(str(ROOT.parent / "assets/brass-rocket"), indexed=True)
     m = Model()
+    # A striped safety switch and an over-pressurized soda cylinder.
+    m.box(0, 0.42, 0, 0.85, 0.84, 0.55, 2)
+    m.box(0, 0.95, 0, 1.05, 0.38, 0.69, 1)
+    m.box(0, 1.08, 0.24, 0.74, 0.29, 0.24, 15)
+    m.box(0, 1.10, 0.39, 0.50, 0.17, 0.12, 17)
+    save(m, "switch")
+    m = Model()
+    m.cone(0, 0.06, 0, 0.50, 0.59, 0.22, 3, 12)
+    m.cone(0, 0.28, 0, 0.59, 0.59, 1.42, 12, 12)
+    m.cone(0, 1.70, 0, 0.59, 0.46, 0.2, 3, 12)
+    for h in (0.37, 1.53):
+        m.cone(0, h, 0, 0.60, 0.60, 0.10, 5, 12)
+    sign(m, "FIZZ", 0, 1.04, 0.57, 0.91, 11, 17)
+    m.box(0, 1.97, 0, 0.30, 0.11, 0.16, 16)
+    save(m, "fizz")
+    m = Model()
     # Raised concentric metal plates remain readable against both the stage and the turf.
     for width, depth, color in (
         (1.55, 0, 1),
@@ -344,32 +387,15 @@ def props():
     ):
         m.box(0, 0, depth, width, width, 0.1, color)
     save(m, "bullseye")
-    for name in ("freezer", "shrinker", "twins"):
-        m = Model()
-        barrels = (-0.24, 0.24) if name == "twins" else (0,)
-        for x in barrels:
-            c = 24 if name == "freezer" else 20 if name == "shrinker" else 11
-            m.box(x, -0.13, 0.15, 0.20, 0.37, 0.22, 1)
-            m.box(x, 0.02, -0.03, 0.35, 0.27, 0.77, c)
-            for n in range(4):
-                m.box(
-                    x,
-                    0.04,
-                    -0.45 + n * 0.13,
-                    0.4,
-                    0.32,
-                    0.055,
-                    26 if name == "freezer" else 22 if name == "shrinker" else 16,
-                )
-            m.box(x, 0.04, -0.5, 0.24, 0.19, 0.1, 1)
-        save(m, name)
+    weapons(ART, files, save)
+    sector_skins(ART, files, save)
+    floor_tiles(ART, files, save)
     for key, caption in (
         ("use", "USE"),
         ("freeze", "FREEZE"),
         ("aim", "SHOOT"),
         ("shrink", "SHRINK"),
         ("clear", "GOAL POST"),
-        ("escort", "ESCORT"),
         ("launch", "LAUNCH"),
         ("home", "EXIT"),
         ("rocket", "ROCKET"),
@@ -464,14 +490,38 @@ def flyers():
 
 
 def soundtrack():
+    import random
     import struct
     import wave
 
+    # Each shot combines a pitched body and a short filtered-noise transient.
+    # The high crystalline ring and descending alien warble stay audible on phones.
+    for name, duration, start, end, noise, ring in (
+        ("d1-slide", 0.15, 240, 78, 0.78, 0),
+        ("d1-freeze", 0.23, 860, 1690, 0.18, 1450),
+        ("d1-launch", 0.39, 168, 50, 0.84, 0),
+        ("d1-shrink", 0.24, 950, 260, 0.08, 212),
+        ("d1-twins", 0.11, 280, 92, 0.54, 0),
+    ):
+        samples = bytearray()
+        rng = random.Random(name)
+        phase, hiss = 0, 0
+        for i in range(round(22050 * duration)):
+            t = i / 22050
+            u = t / duration
+            hz = end + (start - end) * (1 - u) ** 2
+            phase += math.tau * hz / 22050
+            hiss = 0.48 * hiss + 0.52 * rng.uniform(-1, 1)
+            env = min(1, t / 0.002) * (1 - u) ** 2 * math.exp(-2.5 * u)
+            tone = math.sin(phase + (0.6 * math.sin(t * math.tau * ring) if ring else 0))
+            value = (0.63 * tone + noise * hiss + 0.12 * math.sin(2 * phase)) * env
+            samples.extend(struct.pack("<h", round(max(-1, min(1, value)) * 23000)))
+        with wave.open(str(ROOT.parent / "assets" / (name + ".wav")), "wb") as f:
+            f.setparams((1, 2, 22050, 0, "NONE", "not compressed"))
+            f.writeframes(samples)
+
     # Short original tracker cues. The cinema phrase resolves at the lunar landing.
     cues = {
-        "d1-freeze": ([950, 1160, 1440], 0.055),
-        "d1-shrink": ([765, 574, 430, 322], 0.045),
-        "d1-twins": ([155, 92], 0.038),
         "d1-marquee": ([330, 392, 494, 440, 392, 330, 294, 247], 0.165),
         "d1-earthrise": ([247, 330, 370, 440, 494, 659, 587, 494], 0.24),
         "d1-score": ([392, 494, 587, 784, 659, 784], 0.145),
@@ -497,7 +547,7 @@ if __name__ == "__main__":
     for build in (cinema, diner, silos, flight, luna, bowl, props):
         build()
     catalog = {
-        "revision": "tinseltown-pistol-1",
+        "revision": "tinseltown-arcade-1",
         "missions": [
             {
                 "day": 1,
