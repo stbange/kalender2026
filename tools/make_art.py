@@ -349,6 +349,12 @@ hall.save("great-hall")
 for kind in ("snowman", "gingerbread", "penguin", "guard", "wisp", "friend"):
     m = Model()
     b = m.box
+    def part(name, start, end, width, color, stripe=False):
+        limb = Model()
+        limb.beam((0, 0, 0), tuple(end[i] - start[i] for i in range(3)), width, color)
+        if stripe:
+            limb.box(*(0.76 * (end[i]-start[i]) for i in range(3)), width*1.06, 0.055, width*1.06, 5)
+        limb.save(f"{kind}-{name}")
     if kind == "snowman":
         m.cone(0, -0.92, 0, 0.52, 0.44, 0.75, 27)
         m.cone(0, -0.2, 0, 0.40, 0.34, 0.54, 31)
@@ -356,15 +362,18 @@ for kind in ("snowman", "gingerbread", "penguin", "guard", "wisp", "friend"):
         b(0, 0.82, 0, 0.78, 0.12, 0.65, 0)
         b(0, 1.01, 0, 0.57, 0.34, 0.50, 1)
         b(0, 0.25, 0, 0.78, 0.15, 0.69, 12)
-        b(0.22, 0.02, 0.31, 0.20, 0.36, 0.13, 12)
+        part("scarf", (0,0,0), (0.07,-0.47,0.03), 0.16, 12, True)
+        for side, tag in ((-1,"left"),(1,"right")):
+            part(tag, (0,0,0), (side*0.40,0.23,0.04), 0.085, 7)
         b(0, 0.51, 0.37, 0.14, 0.14, 0.32, 15)
     elif kind == "gingerbread":
         b(0, 0.0, 0, 0.62, 0.83, 0.28, 8)
         b(0, 0.59, 0, 0.62, 0.52, 0.29, 9)
         b(0, 0.33, 0.16, 0.61, 0.06, 0.04, 5)
         for s in (-1, 1):
-            m.beam((s * 0.2, -0.33, 0), (s * 0.36, -0.90, 0), 0.24, 8)
-            m.beam((s * 0.30, 0.16, 0), (s * 0.65, 0.34, 0), 0.23, 9)
+            tag = "left" if s < 0 else "right"
+            part(tag+"-leg",(0,0,0),(s*0.16,-0.57,0),0.24,8,True)
+            part(tag+"-arm",(0,0,0),(s*0.35,0.18,0),0.23,9,True)
         for y in (0, 0.16):
             b(0, y, 0.17, 0.1, 0.1, 0.05, 12)
     elif kind == "penguin":
@@ -373,12 +382,27 @@ for kind in ("snowman", "gingerbread", "penguin", "guard", "wisp", "friend"):
         b(0, -0.14, 0.28, 0.48, 0.78, 0.16, 5)
         b(0, 0.41, 0.38, 0.27, 0.12, 0.22, 15)
         for s in (-1, 1):
-            b(s * 0.30, -0.86, 0.13, 0.38, 0.16, 0.65, 15)
-            m.beam((s * 0.3, 0.15, 0), (s * 0.58, -0.40, 0), 0.20, 1)
+            tag = "left" if s < 0 else "right"
+            skate = Model()
+            skate.box(0,0,0.13,0.38,0.16,0.65,15)
+            skate.box(0,-0.10,0.13,0.06,0.08,0.67,4)
+            skate.save("penguin-"+tag+"-leg")
+            part(tag+"-arm",(0,0,0),(s*0.28,-0.55,0),0.20,1)
     elif kind in ("guard", "friend"):
         for s in (-1, 1):
-            b(s * 0.18, -0.62, 0, 0.24, 0.62, 0.29, 1)
-            b(s * 0.36, -0.02, 0, 0.19, 0.60, 0.24, 12)
+            if kind == "friend":
+                b(s * 0.18, -0.62, 0, 0.24, 0.62, 0.29, 1)
+                b(s * 0.36, -0.02, 0, 0.19, 0.60, 0.24, 12)
+            else:
+                tag = "left" if s < 0 else "right"
+                leg = Model()
+                leg.box(0,-0.31,0,0.24,0.62,0.29,1)
+                leg.box(0,-0.58,0.065,0.28,0.16,0.38,0)
+                leg.save("guard-"+tag+"-leg")
+                arm = Model()
+                arm.box(0,-0.30,0,0.19,0.60,0.24,12)
+                arm.box(0,-0.47,0,0.20,0.08,0.25,15)
+                arm.save("guard-"+tag+"-arm")
         b(0, 0.01, 0, 0.55, 0.74, 0.37, 11 if kind == "guard" else 20)
         b(0, 0.45, 0, 0.43, 0.4, 0.39, 9)
         b(0, 0.85, 0, 0.54, 0.45, 0.50, 1 if kind == "guard" else 20)
@@ -390,7 +414,7 @@ for kind in ("snowman", "gingerbread", "penguin", "guard", "wisp", "friend"):
         m.cone(0, -0.03, 0, 0.46, 0.20, 0.59, 26, 6)
         m.cone(0, 0.56, 0, 0.20, 0, 0.4, 27, 6)
         for s in (-1, 1):
-            m.beam((s * 0.23, 0.12, 0), (s * 0.66, 0.5, 0), 0.14, 27)
+            part("left" if s < 0 else "right",(0,0,0),(s*0.43,0.38,0),0.14,27)
     for s in (-1, 1):
         b(
             s * 0.13,
@@ -432,6 +456,11 @@ orb.cone(0, -0.13, 0, 0.05, 0.15, 0.11, 26, 8)
 orb.cone(0, -0.02, 0, 0.15, 0.06, 0.16, 31, 8)
 orb.save("snowball")
 
+splat = Model()
+splat.cone(0, -0.012, 0, 0.50, 0.46, 0.025, 27, 8)
+splat.cone(0.16, 0, -0.32, 0.24, 0.22, 0.018, 31, 6)
+splat.save("snow-print")
+
 for name, freq in (("throw", 480), ("bell", 784), ("poof", 185)):
     with wave.open(str(OUT / (name + ".wav")), "wb") as f:
         f.setparams((1, 2, 22050, 0, "NONE", "not compressed"))
@@ -446,3 +475,7 @@ for name, freq in (("throw", 480), ("bell", 784), ("poof", 185)):
                 )
             )
         f.writeframes(b"".join(frames))
+
+from make_feedback_art import generate
+
+generate(OUT, png)

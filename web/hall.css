@@ -476,6 +476,85 @@ body.touch .rack img {
     bottom: 2px;
   }
 }
+#hitMark,
+#snowStatus,
+#feedbackText {
+  position: absolute;
+  pointer-events: none;
+}
+#hitMark {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(16px, 2.6vh, 26px);
+  image-rendering: pixelated;
+}
+#snowStatus,
+#feedbackText {
+  left: 18px;
+  padding: 5px 9px;
+  color: #fff4d3;
+  background: #142824ed;
+  border-radius: 3px;
+  font:
+    600 14px Barlow,
+    sans-serif;
+}
+#snowStatus {
+  top: 100px;
+}
+#snowStatus img {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+  image-rendering: pixelated;
+}
+#feedbackText {
+  top: 136px;
+  max-width: min(80vw, 420px);
+}
+#feedbackText:empty {
+  display: none;
+}
+#bells.scored {
+  display: inline-block;
+  outline: 1px solid #ebc579;
+  transform: scale(1.05);
+}
+#snowStatus.brush img {
+  animation: shed 0.1s ease-out;
+}
+@keyframes shed {
+  to {
+    transform: translate(3px, -2px) rotate(10deg);
+  }
+}
+#feedbackForm {
+  display: grid;
+  gap: 8px;
+}
+#feedbackForm label {
+  display: block;
+}
+#feedbackForm output {
+  float: right;
+  color: var(--gold);
+}
+#feedbackForm input[type="range"] {
+  width: 100%;
+  display: block;
+  padding: 0;
+  accent-color: #edc77c;
+}
+#feedbackForm input[type="checkbox"] {
+  width: auto;
+  margin: 0 6px 0 0;
+  accent-color: #edc77c;
+}
+#dialog {
+  max-height: 90dvh;
+  overflow-y: auto;
+}
 #storageWarning {
   position: absolute;
   bottom: 4px;

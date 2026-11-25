@@ -54,7 +54,27 @@ function Net.command(r, id, line, packs)
 end
 function Net.snapshot(r)
     local rows = { string.format("S %d %.3f %d %d %d", r.hours, r.time, r.hits, r.clears, r.wave) }
+    rows[#rows + 1] = string.format("I %d", r.eventId)
+    for _, e in ipairs(r.events) do
+        rows[#rows + 1] = string.format(
+            "E %d %.3f %d %d %d %d %d %d %d %.3f %.3f %.3f %.3f",
+            e.id,
+            e.time,
+            e.code,
+            e.owner,
+            e.seat,
+            e.seq,
+            e.ball,
+            e.weapon,
+            e.target,
+            e.x,
+            e.y,
+            e.z,
+            e.value
+        )
+    end
     for id, p in pairs(r.players) do
+        rows[#rows + 1] = string.format("O %d %d", id, p.seat)
         local run = r.instances[p.space]
         rows[#rows + 1] = string.format(
             "P %d %.3f %.3f %.2f %d %.3f %d %d %d %d",
@@ -83,20 +103,66 @@ function Net.snapshot(r)
     return table.concat(rows, "\n")
 end
 function Net.read(s)
-    local r = { players = {}, mobs = {}, shots = {}, targets = {}, instances = {} }
+    local r = { players = {}, mobs = {}, shots = {}, targets = {}, instances = {}, events = {}, seats = {} }
     for line in s:gmatch("[^\n]+") do
         local w = Net.words(line)
         for i = 2, #w do
             w[i] = tonumber(w[i])
-            if not w[i] then
+            if not w[i] or math.abs(w[i]) == math.huge or w[i] ~= w[i] then
                 return nil
             end
         end
         if w[1] == "S" and #w == 6 then
             r.hours, r.time, r.hits, r.clears, r.wave = w[2], w[3], w[4], w[5], w[6]
+        elseif w[1] == "I" and #w == 2 then
+            r.eventId = w[2]
+        elseif w[1] == "O" and #w == 3 then
+            r.seats[w[2]] = w[3]
+        elseif w[1] == "E" and #w == 14 then
+            local prev = r.events[#r.events]
+            local code, target = w[4], w[10]
+            if
+                #r.events >= Hall.history
+                or w[2] ~= math.floor(w[2])
+                or (prev and w[2] <= prev.id)
+                or code ~= math.floor(code)
+                or code < 1
+                or code > 9
+                or w[5] < 0
+                or w[5] > 8
+                or w[9] < 0
+                or w[9] > 5
+                or target ~= math.floor(target)
+                or (code >= 2 and code <= 4 and (target < 1 or target > 5))
+            then
+                return nil
+            end
+            r.events[#r.events + 1] = {
+                id = w[2],
+                time = w[3],
+                code = w[4],
+                owner = w[5],
+                seat = w[6],
+                seq = w[7],
+                ball = w[8],
+                weapon = w[9],
+                target = w[10],
+                x = w[11],
+                y = w[12],
+                z = w[13],
+                value = w[14],
+            }
         elseif w[1] == "P" and #w == 11 then
-            r.players[w[2]] =
-                { id = w[2], x = w[3], z = w[4], yaw = w[5], space = w[6], slow = w[7], weapon = w[8], awards = w[9] }
+            r.players[w[2]] = {
+                id = w[2],
+                x = w[3],
+                z = w[4],
+                yaw = w[5],
+                space = w[6],
+                slow = w[7],
+                weapon = w[8],
+                awards = w[9],
+            }
             if w[6] > 0 then
                 r.instances[w[6]] = { progress = w[10], done = w[11] == 1 }
             end
@@ -111,7 +177,18 @@ function Net.read(s)
             return nil
         end
     end
-    if r.time and #r.targets == 5 then
+    if
+        r.time
+        and r.eventId
+        and #r.targets == 5
+        and (#r.events == 0 or r.events[#r.events].id <= r.eventId)
+    then
+        for id, p in pairs(r.players) do
+            if not r.seats[id] then
+                return nil
+            end
+            p.seat = r.seats[id]
+        end
         return r
     end
 end
@@ -138,8 +215,8 @@ function Service.receive(slot, line, utc)
         end
         return ""
     end
-    local verb, version, room = line:match("^(%u+) ([%w_%-%.]+) ([%w_%-]+)$")
-    if verb ~= "HELLO" or version ~= Hall.version or #room > 32 then
+    local verb, version, room = line:match("^(%u+%d*) ([%w_%-%.]+) ([%w_%-]+)$")
+    if verb ~= "HELLO2" or version ~= Hall.version or #room > 32 then
         return "ERROR Refresh the game and check the room code"
     end
     local r = Service.rooms[room]
@@ -149,7 +226,7 @@ function Service.receive(slot, line, utc)
     end
     for id = 1, 8 do
         if not r.players[id] then
-            Hall.join(r, id).id = id
+            Hall.join(r, id)
             Service.clients[slot] = { room = room, id = id }
             return "WELCOME " .. id
         end

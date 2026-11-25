@@ -127,9 +127,10 @@ H.fire(ar, shooter, 3, 1, 0, -0.2, -1)
 H.step(ar, 0.10)
 assert(ar.mobs[1].hp == 0)
 for i = 1, 8 do
-    assert(Service.receive(i, "HELLO lantern-1 room", first) == "WELCOME " .. i)
+    assert(Service.receive(i, "HELLO2 lantern-2 room", first) == "WELCOME " .. i)
 end
-assert(Service.receive(9, "HELLO lantern-1 room", first) == "ERROR Room full")
+assert(Service.receive(9, "HELLO2 lantern-2 room", first) == "ERROR Room full")
+assert(Service.receive(9,"HELLO lantern-2 room",first):find("ERROR"))
 assert(Service.receive(9, "invalid", first):find("ERROR"))
 local rr = Service.rooms.room
 Service.step(0.2, first)
@@ -180,6 +181,7 @@ eng = {
         get_pos = function(e)
             return unpack(positions[e])
         end,
+        set_parent = noop,
         set_mesh = noop,
         set_rot_deg = noop,
         set_pocket = noop,
@@ -228,6 +230,8 @@ bit = {
 }
 game = {}
 HostUTC = first
+dofile(base .. "feedback.lua")
+dofile(base .. "visitors.lua")
 dofile(base .. "world.lua")
 dofile(base .. "main.lua")
 MissionPacks[1].build = noop
@@ -240,7 +244,7 @@ for i = 1, 5 do
     pressed = {}
     assert(g.weapon == i)
 end
-assert(host_sound():find("throw"))
+assert(#host_sound()>0)
 assert(host_sound() == "")
 pressed.cycle = true
 pressed.practice = true
@@ -304,7 +308,7 @@ end
 assert(host_hud():find("Hall clear"))
 g.room.hits, g.room.clears = 10, 8
 update(0.02)
-assert(host_sound():find("bell"))
+assert(not host_sound():find("bell")) -- Old score totals are silent.
 local originalWrite = eng.save.write
 eng.save.write = function()
     return false

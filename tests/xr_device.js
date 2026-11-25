@@ -2,7 +2,16 @@
 (() => {
   const matrix = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   const transform = { matrix, inverse: { matrix } };
+  const views = ["left", "right"].map((eye) => {
+    const pose = matrix.slice(),
+      inverse = matrix.slice();
+    pose[12] = eye === "left" ? -0.032 : 0.032;
+    inverse[12] = -pose[12];
+    return { eye, transform: { matrix: pose, inverse: { matrix: inverse } }, projectionMatrix: matrix };
+  });
   window.stereoFrames = 0;
+  window.testPulses = [];
+  window.withActuator = true;
   window.XRWebGLLayer = class {
     constructor(session, gl) {
       this.framebuffer = gl.createFramebuffer();
@@ -30,6 +39,14 @@
           handedness: "right",
           targetRaySpace: {},
           gamepad: {
+            hapticActuators: window.withActuator
+              ? [
+                  {
+                    pulse: async (strength, duration) => window.testPulses.push([strength, duration]),
+                    reset: async () => window.testPulses.push([0, 0]),
+                  },
+                ]
+              : [],
             axes: [0, 0, 0, 0],
             buttons: [{ value: 1 }, { pressed: false }, {}, {}, { pressed: false }, { pressed: false }],
           },
@@ -44,7 +61,7 @@
           fn(t, {
             getViewerPose: () => ({
               transform,
-              views: ["left", "right"].map((eye) => ({ eye, transform, projectionMatrix: matrix })),
+              views,
             }),
             getPose: () => ({ transform }),
           });

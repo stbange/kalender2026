@@ -115,7 +115,8 @@ bool hall_load(eng_runtime_t *rt, const hall_options *opts)
     if (opts->serve)
         return true;
     char error[512] = {0};
-    if (script(rt, "scripts/world.lua") && eng_runtime_boot_game(rt, error, sizeof(error)))
+    if (script(rt, "scripts/feedback.lua") && script(rt, "scripts/visitors.lua") &&
+        script(rt, "scripts/world.lua") && eng_runtime_boot_game(rt, error, sizeof(error)))
         return true;
     fprintf(stderr, "Hall boot failed: %s\n", error);
     return false;

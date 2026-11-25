@@ -91,3 +91,17 @@ The hall SHALL give cleared visitors a brief material-specific farewell.
 
 - **WHEN** a visitor’s confirmed HP reaches zero in the hall
 - **THEN** the client SHALL play a 160 ms departure at its last known position using three flecks in its own material, such as crumbs for the skipper or a loose gear for the guard. Clear the live silhouette at once.
+
+### Requirement: Articulated seasonal movement
+
+The client SHALL animate all five visitor species using editable Lua and loose models. The snowman sways with swinging twig arms and a trailing scarf. The skipper raises its icing-trimmed legs, the penguin pushes with alternating skates and balancing flippers, the guard marches with opposing limbs, and the wisp opens and folds crystal wings. Grounded gait advances with distance travelled. The Motion preference scales additional movement all the way to zero.
+
+#### Scenario: Five visitors cross the aisle
+
+- **WHEN** awake visitors move, change heading, stop or leave the room
+- **THEN** the client SHALL place each species’ articulated parts at its live body, stop grounded foot cycles when stationary and remove the body and its children together. Animation SHALL preserve shared movement, contact positions, wake times and cooldowns.
+
+#### Scenario: A player uses reduced motion
+
+- **WHEN** Motion is set to zero during a wave
+- **THEN** the client SHALL retain each visitor’s silhouette, shared position and facing, and keep slowdown and recovery legible.

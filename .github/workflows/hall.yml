@@ -28,7 +28,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y ninja-build lua5.1 xvfb libgl-dev libegl-dev libssl-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev libwayland-dev libxkbcommon-dev libasound2-dev libpulse-dev
-          pip install gcovr==8.8 'websockets>=15,<18' playwright
+          pip install gcovr==8.8 'websockets>=15,<18' playwright pillow
           python -m playwright install --with-deps chromium
           npm install -g @fission-ai/openspec
       - uses: libsdl-org/setup-sdl@v1
@@ -54,6 +54,7 @@ jobs:
           gcovr --root . --filter "$PWD/src/" --filter "$PWD/server/" --fail-under-line 95 --txt reports/c-units.txt --print-summary build-cov
           python tests/lua_coverage.py | tee reports/lua-units.txt
           python tests/coverage_guard.py
+          python tests/feedback_art_test.py
           ctest --test-dir build-cov --output-on-failure
           build-cov/lantern --root . --fixture tests/fixture --headless --doctor
       - name: Package release Linux client and room
@@ -79,6 +80,7 @@ jobs:
           python tests/browser_smoke.py --site dist/web --binary build/lantern
           python tests/content_test.py --binary build/lantern --web-build build-web
           python tests/visual_check.py --site dist/web --out reports/views
+          python tests/visitor_animation.py --site dist/web --out reports/views/visitors.webp
           tar -C dist/web -czf lantern-web.tar.gz .
       - uses: actions/upload-artifact@v4
         with:

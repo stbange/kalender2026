@@ -25,9 +25,17 @@ The pistol fires one quick snowball. The Flurry Fan throws three in a fan. Hold 
 
 Doors become due one at a time at midnight in Europe/Warsaw, December 1–24, 2026. Solo play uses the device clock. Friends share their host's clock. A due door without a released pack says **Mission in preparation**. Installed missions support independent entry, shared objectives and walking back to the hall. Personal ornaments are saved on the device. The hall release ships with an empty mission catalog.
 
+## Snowplay feedback
+
+The pistol snaps, the Fan scatters powder along its spread, the Spinner ratchets, the Bankshot clicks at each bounce, and the Snow Rocket leaves a trail and a ring at the burst. A short crosshair mark confirms your own hit. A diamond confirms a clear. Bells swing and ring at five pitches, and a boot icon shows when a visitor has slowed you down.
+
+Open **Feedback** in the Web menu or press **F3** in the native game to change motion, snow detail, sound, controller vibration, hit marks, captions or high-contrast outlines. On desktop, use the arrow keys in the native panel and Escape to return. Preferences are saved on each device. The Web game uses the system’s reduced-motion preference on first launch. Optional vibration uses the firing hand in WebXR.
+
+![Five visitors crossing the aisle, showing the snowman’s trailing scarf, the gingerbread skip, the penguin’s skates, the guard’s march and the wisp’s wings](docs/visitors.webp)
+
 ## Host a room on Linux
 
-Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
+Use the **0.2.0** room service with the updated clients. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
 
 1. Point a domain at the host. Allow inbound TCP on ports 80 and 443 for Caddy's HTTPS certificate and WebSocket traffic. Keep port 8787 private.
 2. Install [Caddy](https://caddyserver.com/docs/install), replace the example domain in [hosting/Caddyfile](hosting/Caddyfile) and use it as the Caddy configuration. Caddy terminates TLS and proxies WebSocket upgrades.

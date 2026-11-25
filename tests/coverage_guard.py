@@ -13,7 +13,7 @@ with tempfile.TemporaryDirectory() as directory:
     shutil.copytree(root / "games/kalender2026/scripts", temp / "games/kalender2026/scripts")
     pack = temp / "games/kalender2026/missions"
     pack.mkdir()
-    (pack / "unloaded.lua").write_text("local n=0\n" + "n=n+1\n" * 100 + "return n\n")
+    (pack / "unloaded.lua").write_text("local n=0\n" + "n=n+1\n" * 500 + "return n\n")
     result = subprocess.run(
         [sys.executable, str(temp / "tests/lua_coverage.py")], capture_output=True, text=True
     )

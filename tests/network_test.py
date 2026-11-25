@@ -106,9 +106,9 @@ def tls_proxy(port, directory):
             thread.join()
 
 
-def hello(url, room="friends", revision="lantern-1", **kwargs):
+def hello(url, room="friends", revision="lantern-2", **kwargs):
     ws = connect(url, proxy=None, open_timeout=6, close_timeout=0.3, max_queue=None, **kwargs)
-    ws.send(f"HELLO {revision} {room}")
+    ws.send(f"HELLO2 {revision} {room}")
     answer = ws.recv(timeout=5)
     return ws, answer
 
@@ -131,9 +131,33 @@ def snapshot(ws, predicate, timeout=8):
             players={},
             mobs={},
             targets={},
+            seats={},
+            events=[],
+            latest=0,
         )
         for row in lines[1:]:
-            if row[0] == "P":
+            if row[0] == "I":
+                state["latest"] = int(row[1])
+            elif row[0] == "O":
+                state["seats"][int(row[1])] = int(row[2])
+            elif row[0] == "E":
+                idx, t, code, owner, seat, seq, ball, tool, target, x, y, z, value = row[1:]
+                state["events"].append(
+                    dict(
+                        id=int(idx),
+                        time=float(t),
+                        code=int(code),
+                        owner=int(owner),
+                        seat=int(seat),
+                        seq=int(seq),
+                        ball=int(ball),
+                        weapon=int(tool),
+                        target=int(target),
+                        pos=(float(x), float(y), float(z)),
+                        value=float(value),
+                    )
+                )
+            elif row[0] == "P":
                 _, idx, x, z, yaw, space, slow, weapon, award, progress, done = row
                 state["players"][int(idx)] = dict(
                     x=float(x),
@@ -169,7 +193,7 @@ def public_room(binary, root):
         url = f"ws://127.0.0.1:{port}"
         clients = []
 
-        def join(room="friends", revision="lantern-1"):
+        def join(room="friends", revision="lantern-2"):
             ws, answer = hello(url, room, revision)
             stack.callback(ws.close)
             return ws, answer
@@ -185,6 +209,11 @@ def public_room(binary, root):
             s = snapshot(ws, lambda s: s["hits"] == 1)
             assert s["targets"][3] > s["time"] and s["wave"] == 1 and len(s["mobs"]) == 5
             assert len(s["players"]) == 8
+            assert [e["code"] for e in s["events"]] == [1, 4]
+            launch, bell = s["events"]
+            assert launch["owner"] == bell["owner"] == 1
+            assert launch["seq"] == bell["seq"] == 1 and bell["seat"] == s["seats"][1]
+            assert bell["target"] == 3 and bell["id"] == s["latest"] and launch["ball"] == bell["ball"]
         assert join()[1] == "ERROR Room full"
         assert join(revision="earlier")[1].startswith("ERROR")
         isolated, answer = join("separate")
@@ -193,8 +222,10 @@ def public_room(binary, root):
         snapshot(observer, lambda s: len(s["players"]) == 7)
         new, answer = join()
         assert answer == "WELCOME 8"
-        assert snapshot(new, lambda s: s["hits"] == 1)["wave"] == 1
-        new.send("HELLO lantern-1 friends")
+        joined = snapshot(new, lambda s: s["hits"] == 1)
+        assert joined["wave"] == 1 and joined["latest"] == bell["id"]
+        assert joined["seats"][8] != s["seats"][8]
+        new.send("HELLO2 lantern-2 friends")
         assert len(snapshot(new, lambda s: True)["players"]) == 8
         with tempfile.TemporaryDirectory() as tmp, tls_proxy(port, tmp) as (secure, cert, names):
             witness, answer = join("native")
@@ -234,7 +265,7 @@ def coop(binary, root):
     with service(binary, root, True) as port, contextlib.ExitStack() as stack:
         clients = []
         for i in range(8):
-            ws, answer = hello(f"ws://127.0.0.1:{port}", revision="lantern-1-fixture")
+            ws, answer = hello(f"ws://127.0.0.1:{port}", revision="lantern-2-fixture")
             stack.callback(ws.close)
             clients.append(ws)
             assert answer == f"WELCOME {i + 1}"

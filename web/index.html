@@ -30,7 +30,8 @@
           ><button id="join">Join friends</button>
         </div>
         <div class="links">
-          <button id="controls">Controls</button><span>·</span><button id="credits">Credits</button>
+          <button id="controls">Controls</button><span>·</span><button id="feedback">Feedback</button
+          ><span>·</span><button id="credits">Credits</button>
         </div>
         <p id="loading" role="status">Loading the Christmas hall…</p>
       </section>
@@ -40,6 +41,9 @@
           ><span><b id="bells">0</b> bells</span><span><b id="visitors">5</b> visitors</span>
         </div>
         <div id="crosshair" aria-hidden="true">+</div>
+        <img id="hitMark" hidden alt="" />
+        <div id="snowStatus" hidden><img alt="" /> <span></span></div>
+        <div id="feedbackText" aria-live="polite"></div>
         <div id="hint" role="status"></div>
         <div class="rack" aria-label="Choose snowcaster">
           <button data-weapon="1" aria-label="Snowball Pistol">
@@ -86,6 +90,28 @@
         <button class="primary">Enter room</button><button type="button" id="invite">Copy invitation</button
         ><button type="button" id="solo">Play solo</button><output id="joinStatus"></output></form
     ></template>
+    <template id="feedbackPanel"
+      ><h2>Feedback</h2>
+      <form id="feedbackForm">
+        <label
+          >Motion <output></output><input data-pref="1" type="range" min="0" max="100" step="10"
+        /></label>
+        <label
+          >Snow detail <output></output><input data-pref="2" type="range" min="0" max="100" step="10"
+        /></label>
+        <label
+          >Sounds <output></output><input data-pref="3" type="range" min="0" max="100" step="10"
+        /></label>
+        <label
+          >Controller vibration <output></output
+          ><input data-pref="4" type="range" min="0" max="100" step="10"
+        /></label>
+        <label><input data-pref="5" type="checkbox" /> Hit marks</label>
+        <label><input data-pref="6" type="checkbox" /> Sound captions</label>
+        <label><input data-pref="7" type="checkbox" /> High-contrast outlines</label>
+        <label><input data-pref="8" type="checkbox" /> Reduced motion</label>
+      </form></template
+    >
     <template id="controlPanel"
       ><h2>Hall controls</h2>
       <dl>

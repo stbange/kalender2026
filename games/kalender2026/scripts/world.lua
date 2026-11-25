@@ -1,6 +1,9 @@
 World = {
     meshes = {},
     mobs = {},
+    joints = {},
+    prints = {},
+    fxTextures = {},
     bells = {},
     doors = {},
     markers = {},
@@ -33,11 +36,40 @@ function W.build()
     W.palette = eng.asset.load_texture("assets/palette.png", true)
     W.snow = eng.asset.load_texture("assets/snow.png", true)
     W.ember = eng.asset.load_texture("assets/ember.png", true)
+    for _, name in ipairs({
+        "powder",
+        "crumb",
+        "gear",
+        "mote",
+        "boot",
+        "footprint",
+        "bellcue",
+        "clearcue",
+        "practicecue",
+        "doorcue",
+        "rearleft",
+        "rearright",
+        "ticks",
+        "finish",
+        "scratch",
+        "stamp",
+        "boot-contrast",
+        "ticks-contrast",
+        "finish-contrast",
+    }) do
+        W.fxTextures[name] = eng.asset.load_texture("assets/" .. name .. ".png", true)
+    end
+    W.fxTextures.ring = W.fxTextures.powder
     W.box = eng.asset.box(1, 1, 1)
     W.wreath = eng.asset.voxel_ascii({ "02220", "22022", "20002", "22022", "02220" }, 5, 5, 1, 0.13)
     object("Timber galleries", mesh("great-hall"), 0, 0, 0)
     eng.render.set_sky(0.018, 0.035, 0.085, 0.14, 0.25, 0.33, 0.10, 0.14, 0.13)
-    eng.render.add_light({ type = "dir", dir = { -0.35, -0.9, -0.4 }, color = { 1.6, 1.47, 1.28 }, shadow = false })
+    eng.render.add_light({
+        type = "dir",
+        dir = { -0.35, -0.9, -0.4 },
+        color = { 1.6, 1.47, 1.28 },
+        shadow = false,
+    })
     eng.render.add_light({ type = "point", pos = { 0, 5, 1 }, color = { 2.4, 1.75, 0.8 }, range = 19 })
     eng.render.add_light({ type = "point", pos = { -19, 2.5, 0 }, color = { 2.7, 1.0, 0.35 }, range = 14 })
     eng.render.add_light({ type = "point", pos = { 11, 6, -10 }, color = { 0.7, 1.2, 2.0 }, range = 22 })
@@ -95,6 +127,7 @@ function W.build()
     end
     for i, m in ipairs(Hall.visitors) do
         W.mobs[i] = object(m.name, mesh(m.file), 0, -40, 0)
+        W.joints[i] = Visitors.build(i, W.mobs[i], object, mesh)
     end
     for i, t in ipairs(Hall.targets) do
         W.bells[i] = object("Range bell " .. i, mesh("bell"), t[1], t[2], t[3])
@@ -152,21 +185,52 @@ local function doors(r, awards)
     end
     W.lastDay, W.lastAwards = r.hours, awards
 end
+local F = Feedback
+local function prints(g)
+    local used = 0
+    local f = g.feedback
+    for i = 1, F.limit(g) do
+        local e = f.effects[i]
+        if e.plane and g.space == 0 and g.clock < e.start + e.life and e.life > 0 then
+            used = used + 1
+            local node = W.prints[used]
+            if not node then
+                node = object("Snow print " .. used, mesh("snow-print"), 0, -40, 0)
+                W.prints[used] = node
+            end
+            pos(node, e.x, e.y, e.z)
+            rot(node, e.plane == 3 and 90 or 0, e.angle, e.plane == 1 and 90 or 0)
+            scale(node, e.size * (e.kind == "scratch" and 0.3 or 1), e.size, e.size)
+        end
+    end
+    for i = used + 1, #W.prints do
+        pos(W.prints[i], 0, -40, 0)
+    end
+end
 function W.update(g, dt)
     local r = g.room
     doors(r, g.awards)
     for i, e in ipairs(W.mobs) do
-        local m = r.mobs[i]
-        if m and m.hp > 0 and m.wake <= r.time then
-            pos(e, m.x, m.y + 0.04 * math.sin(r.time * 4 + i), m.z)
-            rot(e, 0, m.heading or 0, 0)
-        else
-            pos(e, 0, -40, 0)
-        end
+        Visitors.update(g, i, e, W.joints[i], dt)
     end
+    local f = g.feedback
+    f.quietWake = false
+    local motion = f.prefs[1] / 100
     for i, e in ipairs(W.bells) do
-        rot(e, (r.targets[i] or 0) > r.time and 55 or 0, 0, 0)
+        local remaining = (r.targets[i] or 0) - r.time
+        local tilt = 0
+        if remaining > 0 then
+            local t = Hall.clamp((F.bellReset - remaining) / F.swingTime, 0, 1)
+            tilt = F.on("HALL-01") and 18 + motion * 37 * (1 - t) ^ 2 * math.cos(2 * math.pi * t) or 55
+        end
+        rot(e, tilt, 0, 0)
     end
+    for day, at in pairs(f.lastKnock) do
+        local _, _, ix, iz = Hall.door(day)
+        local t = math.min(1, (g.clock - at) / 0.12)
+        rot(W.markers[day], 0, math.deg(math.atan2(ix, iz)), 4 * math.sin(t * math.pi) * motion)
+    end
+    prints(g)
     for i, e in ipairs(W.friends) do
         local p = r.players[i]
         if p and i ~= g.id then
@@ -182,6 +246,7 @@ function W.update(g, dt)
             pos(e, 0, -40, 0)
         end
     end
+    local live = {}
     for index, s in ipairs(r.shots) do
         if not W.balls[index] then
             W.balls[index] = object("Flying snow", mesh("snowball"), s.x, s.y, s.z)
@@ -190,6 +255,26 @@ function W.update(g, dt)
         local size = s.kind == 5 and 2.1 or 1
         pos(e, s.x, s.y, s.z)
         scale(e, size, size, size)
+        if s.kind == 5 and F.on("FIRE-07") and g.space == 0 then
+            local last = f.trails[s.id]
+            if last then
+                local dx, dy, dz = last.x - s.x, last.y - s.y, last.z - s.z
+                local len = math.sqrt(dx * dx + dy * dy + dz * dz)
+                if len > 0.001 then
+                    last.dx, last.dy, last.dz = dx / len, dy / len, dz / len
+                    last.at = g.clock
+                end
+                last.x, last.y, last.z = s.x, s.y, s.z
+            else
+                f.trails[s.id] = { x = s.x, y = s.y, z = s.z, at = -1 }
+            end
+            live[s.id] = true
+        end
+    end
+    for id in pairs(f.trails) do
+        if not live[id] then
+            f.trails[id] = nil
+        end
     end
     for i = #r.shots + 1, #W.balls do
         pos(W.balls[i], 0, -40, 0)
@@ -211,11 +296,17 @@ function W.update(g, dt)
         rot(gun, g.xr.pitch, g.xr.yaw, 0)
     else
         local reach = 0.62 - g.recoil
+        local stride = math.pi * (f.step + f.stride / F.stride)
+        local gait = F.on("HALL-05")
+                and 0.008 * motion * math.max(0, 1 - (g.clock - (f.walkAt or -1)) / 0.12) * (g.recoil > 0 and 0.25 or 1)
+            or 0
+        local dip = F.on("FIRE-08") and 0.04 * motion * math.max(0, 1 - (g.clock - f.swapStart) / F.handover)
+            or 0
         pos(
             gun,
-            g.x + fx * reach + math.cos(yaw) * 0.26,
-            1.55 + fy * reach - 0.18 * math.cos(pitch),
-            g.z + fz * reach - math.sin(yaw) * 0.26
+            g.x + fx * reach + math.cos(yaw) * (0.26 + gait * math.sin(stride)),
+            1.55 + fy * reach - 0.18 * math.cos(pitch) - dip + gait * math.cos(2 * stride),
+            g.z + fz * reach - math.sin(yaw) * (0.26 + gait * math.sin(stride))
         )
         rot(gun, g.pitch + g.recoil * 50, g.yaw, 0)
     end
@@ -228,6 +319,75 @@ end
 function W.sprites(g)
     if g.space ~= 0 then
         return
+    end
+    local f = g.feedback
+    local function sprite(kind, x, y, z, size)
+        eng.render.draw_sprite(x, y, z, size, size, W.fxTextures[kind])
+    end
+    local limit = F.limit(g)
+    local used = 0
+    for i = 1, limit do
+        local e = f.effects[i]
+        local age = g.clock - (e.start or 0)
+        if age < e.life then
+            used = used + 1
+            if not e.plane then
+                local motion = f.prefs[1] / 100
+                local t = age * motion
+                if e.kind == "ring" then
+                    t = age * motion + e.life * (1 - motion)
+                end
+                sprite(
+                    e.kind,
+                    e.x + t * e.vx,
+                    e.y + t * e.vy,
+                    e.z + t * e.vz,
+                    e.size * (1 - 0.48 * age / e.life * motion)
+                )
+            end
+        end
+    end
+    for _, v in pairs(f.trails) do
+        if v.dx and g.clock - v.at < 0.1 then
+            for k = 1, math.min(3, limit - used) do
+                sprite(
+                    "powder",
+                    v.x + v.dx * k * 0.15,
+                    v.y + v.dy * k * 0.15,
+                    v.z + v.dz * k * 0.15,
+                    0.13 - k * 0.023
+                )
+                used = used + 1
+            end
+        end
+    end
+    if g.clock < math.max(f.answer, f.invite) and used < limit then
+        local anim = f.prefs[1] / 100
+        sprite(
+            "bellcue",
+            g.clock < f.answer and 0.18 * anim * math.sin((f.answer - g.clock) * 25) or 0,
+            2 + anim * 0.16 * math.sin((f.invite - g.clock) * 4),
+            -13,
+            0.40
+        )
+        used = used + 1
+    end
+    f.drawn = used
+    local contrast = f.prefs[7] == 1 and "-contrast" or ""
+    if g.xr then
+        if f.prefs[5] == 1 and g.clock < f.markUntil then
+            sprite(f.mark .. contrast, f.mx, f.my + 0.09, f.mz, 0.24)
+        end
+        local hand = g.xr
+        if (f.slow and F.on("VIS-02")) or g.clock < f.recovery then
+            sprite("boot" .. contrast, g.x + hand.ox, 1.70 + hand.oy, g.z + hand.oz, 0.10)
+        end
+        if f.prefs[6] == 1 then
+            for i, c in ipairs(f.captions) do
+                sprite(c.icon, c.x, c.y + 0.10 * i, c.z, 0.24)
+                sprite(c.icon, g.x + hand.ox + 0.07 * i, 1.82 + hand.oy, g.z + hand.oz, 0.06)
+            end
+        end
     end
     local t = g.room.time
     for n = 1, 34 do

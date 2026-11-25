@@ -32,7 +32,10 @@ def package(build, out, web, fixture=None, server=False):
     for f in sorted(src.rglob("*")):
         rel = f.relative_to(src)
         if server and (
-            rel.parts[0] == "assets" or rel.as_posix() in ("scripts/world.lua", "scripts/main.lua")
+            rel.parts[0] == "assets"
+            or rel.as_posix() in (
+                "scripts/world.lua", "scripts/main.lua", "scripts/feedback.lua", "scripts/visitors.lua",
+            )
         ):
             continue
         if f.is_file() and rel.parts[0] not in ("tests", "saves") and f.suffix != ".engb":

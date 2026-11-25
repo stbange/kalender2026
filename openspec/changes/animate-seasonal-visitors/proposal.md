@@ -17,6 +17,8 @@ A snowman can slow someone while the nearest door’s message occupies the same 
 - **VIS-09 · Frost Wisp drift.** Make the wisp’s floating motion readable against the hall.
 - **VIS-10 · A visitor bows out.** Give cleared visitors a brief material-specific farewell.
 
+- Give all five visitor meshes articulated parts and a distinct gait. Use travel distance to drive the legs and skates, and the wisp’s float cycle to drive its wings.
+
 ## Impact
 
 Adds presentation to the hall-snowplay wake, movement, slowdown and clear states. Uses the existing five visitor meshes, positions, headings and wake times. Distinguishes a short speed penalty from harm through the art, copy and timing.

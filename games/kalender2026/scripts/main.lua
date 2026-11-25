@@ -25,13 +25,12 @@ function init()
         nextPose = 0,
         awards = saved(),
         outbox = {},
-        sounds = {},
+        feedback = Feedback.new(),
         doorGuard = 0,
         connection = "Solo practice",
         flavor = "",
-        seenHits = 0,
-        seenClears = 0,
     }
+    Feedback.baseline(game.state, false)
     World.build()
     World.update(game.state, 0)
 end
@@ -46,12 +45,6 @@ function host_drain()
     local g = game.state
     local s = table.concat(g.outbox, "\n")
     g.outbox = {}
-    return s
-end
-function host_sound()
-    local g = game.state
-    local s = table.concat(g.sounds, " ")
-    g.sounds = {}
     return s
 end
 function host_receive(msg)
@@ -71,6 +64,7 @@ function host_receive(msg)
         local state = Hall.new(Hall.due(HostUTC))
         local p = Hall.join(state, 1)
         g.room, g.online, g.id, g.space, g.x, g.z, g.awaiting = state, false, 1, 0, p.x, p.z, false
+        Feedback.baseline(g, true)
         g.connection = msg == "DISCONNECTED" and "Disconnected · solo practice" or msg:sub(7)
         g.outbox = {}
         return
@@ -80,12 +74,22 @@ function host_receive(msg)
     if not p or (g.lastSnapshot and r.time < g.lastSnapshot) then
         return
     end
+    local baseline = g.awaiting or p.space ~= g.space
     g.lastSnapshot = r.time
     if g.awaiting or p.space ~= g.space or (p.x - g.x) ^ 2 + (p.z - g.z) ^ 2 > 2.0 then
         g.x, g.z, g.yaw, g.space, g.doorGuard = p.x, p.z, p.yaw, p.space, g.clock + 0.6
     end
     g.awaiting = false
     g.room = r
+    if g.feedback.resume then
+        baseline = true
+        g.feedback.resume = false
+    end
+    if baseline then
+        Feedback.baseline(g, true)
+    else
+        Feedback.consume(g)
+    end
 end
 function host_xr(active, ox, oy, oz, dx, dy, dz, turn)
     local g = game.state
@@ -108,7 +112,11 @@ function host_xr(active, ox, oy, oz, dx, dy, dz, turn)
 end
 function host_weapon(w)
     local g = game.state
-    g.weapon = 1 + ((w or g.weapon + 1) - 1) % 5
+    local nextTool = 1 + ((w or g.weapon + 1) - 1) % 5
+    if nextTool ~= g.weapon then
+        Feedback.switch(g)
+        g.weapon = nextTool
+    end
 end
 local function apply_award(g, p)
     local mask = bit.bor(g.awards, p.awards)
@@ -149,9 +157,8 @@ local function fire(g)
             Hall.clamp(a.oz, -1, 1)
         )
     )
-    g.recoil = 0.095
+    Feedback.shot(g, a)
     g.nextFire = g.clock + Hall.weapons[g.weapon].delay
-    g.sounds[#g.sounds + 1] = "throw"
 end
 function host_pack_ready(day, ok)
     local g = game.state
@@ -172,7 +179,7 @@ end
 function update(dt)
     local g = game.state
     g.clock = g.clock + dt
-    g.recoil = math.max(0, g.recoil - dt * 0.64)
+
     if g.awaiting then
         return
     end
@@ -210,7 +217,9 @@ function update(dt)
     g.yaw = g.yaw % 360
     dx, dz =
         dx + (HostMoveX or 0) * Hall.walk_speed(r, p) * dt, dz + (HostMoveZ or 0) * Hall.walk_speed(r, p) * dt
+    local oldX, oldZ = g.x, g.z
     g.x, g.z = Hall.move(g.x, g.z, dx, dz, g.space)
+    Feedback.walk(g, g.x - oldX, g.z - oldZ)
     if not g.online then
         p.x, p.z, p.yaw = g.x, g.z, g.yaw
     elseif g.clock >= g.nextPose then
@@ -220,6 +229,9 @@ function update(dt)
     local use = eng.input.pressed("interact")
     if g.space == 0 then
         local day = Hall.near_door(g.x, g.z, 1.1)
+        if use and day and day > r.hours then
+            Feedback.knock(g, day)
+        end
         if day and g.clock > g.doorGuard and (MissionPacks[day] or use) then
             if day <= r.hours and MissionPacks[day] and not World.prepared[day] and HostWeb then
                 if not g.loadingDay then
@@ -236,8 +248,12 @@ function update(dt)
                 end
             end
         end
-        if eng.input.down("fire") and g.clock >= g.nextFire then
-            fire(g)
+        if eng.input.down("fire") then
+            if g.clock >= g.nextFire then
+                fire(g)
+            end
+        else
+            Feedback.endBurst(g)
         end
         if use and (g.x ^ 2 + (g.z + 13) ^ 2) < 16 then
             command(g, "BELL")
@@ -254,13 +270,7 @@ function update(dt)
         g.x, g.z, g.yaw, g.space, g.doorGuard = p.x, p.z, p.yaw, p.space, g.clock + 0.65
     end
     apply_award(g, p)
-    if r.hits > g.seenHits then
-        g.sounds[#g.sounds + 1] = "bell"
-    end
-    if r.clears > g.seenClears then
-        g.sounds[#g.sounds + 1] = "poof"
-    end
-    g.seenHits, g.seenClears = r.hits, r.clears
+    Feedback.tick(g)
     World.update(g, dt)
 end
 function host_hud()
@@ -301,28 +311,41 @@ function host_hud()
     if g.loadingDay then
         hint = "Loading door " .. g.loadingDay
     end
-    return table.concat(
-        {
-            Hall.weapons[g.weapon].name,
-            g.weapon,
-            r.hits,
-            alive,
-            r.wave,
-            r.hours,
-            count,
-            g.connection,
-            hint,
-            g.space,
-            g.awards,
-        },
-        "|"
-    )
+    return table.concat({
+        Hall.weapons[g.weapon].name,
+        g.weapon,
+        r.hits,
+        alive,
+        r.wave,
+        r.hours,
+        count,
+        g.connection,
+        hint,
+        g.space,
+        g.awards,
+        Feedback.hud(g),
+    }, "|")
 end
 function draw()
     local g = game.state
     World.sprites(g)
     local h = host_hud()
     local w = Hall.weapons[g.weapon]
+    local f = g.feedback
+    if f.slow then
+        eng.render.draw_text("Slowed", 40, 112, 1)
+    end
+    if f.rearIcon and f.rearIcon.untilTime > g.clock then
+        eng.render.draw_text(f.rearIcon.text, 18, 235, 1)
+    end
+    if f.prefs[6] == 1 then
+        for i, c in ipairs(f.captions) do
+            eng.render.draw_text(c.text, 18, 116 + i * 24, 1)
+        end
+    end
+    if g.clock < f.hintUntil then
+        eng.render.draw_text(f.dayText, 18, 198, 1)
+    end
     eng.render.draw_text(
         string.format("%d  %s    |    bells %d    |    wave %d", g.weapon, w.name, g.room.hits, g.room.wave),
         18,

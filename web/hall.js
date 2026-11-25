@@ -32,9 +32,46 @@ function menu(show) {
     }
   }
 }
+let syncing = false,
+  dirty = false;
+function persist() {
+  dirty = true;
+  if (syncing) return;
+  function flush() {
+    syncing = true;
+    dirty = false;
+    Module.FS.syncfs(false, (e) => {
+      syncing = false;
+      if (e) storageWarning();
+      if (dirty) flush();
+    });
+  }
+  flush();
+}
+function feedbackForm() {
+  const form = $("feedbackForm");
+  function refresh() {
+    for (const el of form.querySelectorAll("[data-pref]")) {
+      const value = Module._hall_tune(Number(el.dataset.pref), -1);
+      if (el.type === "range") {
+        el.step = value === 25 ? "5" : "10";
+        el.value = value;
+        el.closest("label").querySelector("output").textContent = value + "%";
+      } else el.checked = !!value;
+    }
+  }
+  form.oninput = (event) => {
+    const el = event.target;
+    Module._hall_tune(Number(el.dataset.pref), el.type === "range" ? Number(el.value) : Number(el.checked));
+    refresh();
+    persist();
+  };
+  refresh();
+}
 function panel(which) {
   $("dialogContent").replaceChildren($(which + "Panel").content.cloneNode(true));
   $("dialog").showModal();
+  if (which === "feedback") feedbackForm();
   if (which !== "join") return;
   const form = $("roomForm");
   form.elements.server.value = settings.endpoint;
@@ -89,6 +126,9 @@ function panel(which) {
   };
 }
 $("join").onclick = () => panel("join");
+$("feedback").onclick = () => {
+  if (ready) panel("feedback");
+};
 $("controls").onclick = () => panel("control");
 $("credits").onclick = () => panel("credit");
 $("close").onclick = () => $("dialog").close();
@@ -116,6 +156,38 @@ const movement = {
   KeyE: "interact",
 };
 function keyInput(e) {
+  const control = e.target.closest?.("#feedbackForm [data-pref]");
+  if (control && $("dialog").open) {
+    const down = e.type === "keydown";
+    if (
+      control.type === "range" &&
+      ["ArrowLeft", "ArrowDown", "ArrowRight", "ArrowUp", "Home", "End"].includes(e.key)
+    ) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (down) {
+        const old = Number(control.value);
+        const dir = e.key === "ArrowLeft" || e.key === "ArrowDown" ? -1 : 1;
+        control.value =
+          e.key === "Home"
+            ? 0
+            : e.key === "End"
+              ? 100
+              : Math.max(
+                  0,
+                  Math.min(100, (dir > 0 ? Math.floor(old / 10) + 1 : Math.ceil(old / 10) - 1) * 10),
+                );
+        control.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      return;
+    }
+    if (control.type === "checkbox" && e.code === "Space") {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (down && !e.repeat) control.click();
+      return;
+    }
+  }
   if (!ready || document.body.dataset.mode !== "play" || $("dialog").open) return;
   const down = e.type === "keydown",
     name = movement[e.code];
@@ -228,12 +300,28 @@ window.addEventListener("resize", () => {
 function updateHUD(text) {
   if (text === hudText) return;
   hudText = text;
-  const [weapon, number, bells, visitors, wave, days, players, connection, hint, space, ornaments] =
-    text.split("|");
-  if (lastOrnaments !== undefined && lastOrnaments !== ornaments)
-    Module.FS.syncfs(false, (e) => {
-      if (e) storageWarning();
-    });
+  const [
+    weapon,
+    number,
+    bells,
+    visitors,
+    wave,
+    days,
+    players,
+    connection,
+    hint,
+    space,
+    ornaments,
+    mark,
+    slow,
+    captions,
+    tally,
+    contrast,
+    date,
+    rear,
+    motion,
+  ] = text.split("|");
+  if (lastOrnaments !== undefined && lastOrnaments !== ornaments) persist();
   lastOrnaments = ornaments;
   $("weaponName").textContent = weapon;
   $("bells").textContent = bells;
@@ -241,6 +329,24 @@ function updateHUD(text) {
   $("days").textContent = days;
   $("connection").textContent = connection + (connection === "Live room" ? " · " + players + "/8" : "");
   $("hint").textContent = hint;
+  const art = "games/kalender2026/assets/";
+  const outline = contrast === "1" ? "-contrast" : "";
+  $("hitMark").hidden = !mark;
+  if (mark) $("hitMark").setAttribute("src", art + mark + outline + ".png");
+  $("snowStatus").hidden = !slow;
+  if (slow) {
+    $("snowStatus")
+      .querySelector("img")
+      .setAttribute("src", art + "boot" + outline + ".png");
+    $("snowStatus").querySelector("span").textContent = slow;
+  }
+  $("snowStatus").classList.toggle("brush", slow === "Recovered" && Number(motion) > 0);
+  $("bells").classList.toggle("scored", tally === "1" && Number(motion) > 0);
+  const notice = [date, rear, captions]
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .join(" · ");
+  if ($("feedbackText").textContent !== notice) $("feedbackText").textContent = notice;
   $("practice").hidden = Number(visitors) > 0;
   for (const b of document.querySelectorAll("[data-weapon]"))
     b.classList.toggle("selected", b.dataset.weapon === number);
@@ -294,6 +400,11 @@ var Module = {
       if (settings.endpoint) args.push("--endpoint", settings.endpoint, "--room", settings.room);
       Module.callMain(args);
       ready = true;
+      Module._hall_device(Number(touch), 0);
+      Module._hall_tune(9, Number(matchMedia("(prefers-reduced-motion: reduce)").matches));
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) Module._hall_device(Number(touch), 1);
+      });
       resize();
       menu(true);
       $("enter").disabled = false;

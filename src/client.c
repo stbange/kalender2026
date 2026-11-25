@@ -1,5 +1,6 @@
 #include "hall.h"
 #include "settings.h"
+#include "feedback_audio.h"
 #include <SDL3/SDL.h>
 #include <math.h>
 #include <stdio.h>
@@ -16,7 +17,9 @@ static struct {
     eng_runtime_t *rt;
     eng_ui_t *ui;
     eng_audio_t *audio;
-    uint32_t clips[3];
+    hall_mix mix;
+    bool preferences;
+    int preference_row;
     bqws_socket *ws;
     char hello[128];
     char active_endpoint[384], active_room[33];
@@ -55,7 +58,8 @@ WEB_EXPORT void hall_choose(int number)
 }
 WEB_EXPORT void hall_menu(int show)
 {
-    hall_eval(app.rt, show ? "game.state.menu=true" : "game.state.menu=false", NULL, 0);
+    hall_eval(app.rt, show ? "game.state.menu=true;Feedback.endBurst(game.state)" : "game.state.menu=false",
+              NULL, 0);
 }
 WEB_EXPORT void hall_resize(int width, int height)
 {
@@ -94,7 +98,7 @@ WEB_EXPORT int hall_connect(const char *endpoint, const char *room)
     char version[64];
     if (!hall_eval(app.rt, "return Hall.version", version, sizeof(version)))
         return 0;
-    snprintf(app.hello, sizeof(app.hello), "HELLO %s %s", version, room);
+    snprintf(app.hello, sizeof(app.hello), "HELLO2 %s %s", version, room);
     snprintf(app.active_endpoint, sizeof(app.active_endpoint), "%s", endpoint);
     snprintf(app.active_room, sizeof(app.active_room), "%s", room);
     app.ws = bqws_pt_connect(endpoint, NULL, NULL, NULL);
@@ -139,23 +143,64 @@ static void network(void)
     }
 }
 
-static void audio_frame(float dt)
+static void audio_frame(float dt) { hall_mix_frame(&app.mix, app.rt, app.audio, dt); }
+
+WEB_EXPORT int hall_tune(int row, int value)
 {
-    char queue[128];
-    hall_eval(app.rt, "return host_sound()", queue, sizeof(queue));
-    for (char *s = strtok(queue, " "); s; s = strtok(NULL, " ")) {
-        int i = !strcmp(s, "throw") ? 0 : (!strcmp(s, "bell") ? 1 : 2);
-        eng_voice_desc_t voice = eng_voice_default_desc(app.clips[i]);
-        eng_audio_play(app.audio, &voice);
-    }
-    eng_audio_update(app.audio, eng_runtime_scene(app.rt), eng_runtime_portals(app.rt), dt);
+    char code[96], result[32];
+    snprintf(code, sizeof(code), "return host_tune(%d,%d)", row, value);
+    int current = hall_eval(app.rt, code, result, sizeof(result)) ? atoi(result) : 0;
+    if (row == 3 && app.audio)
+        eng_audio_set_bus_gain(app.audio, ENG_BUS_SFX, current / 100.f);
+    return current;
+}
+/* Sampled by the repeatable Web performance route after a rendered frame. */
+WEB_EXPORT unsigned hall_mix_stat(int stat)
+{
+    if (stat == 0)
+        return app.mix.peak;
+    if (stat == 1)
+        return app.mix.played;
+    return app.mix.dropped;
 }
 
+WEB_EXPORT int hall_pulse(void)
+{
+    char result[40];
+    return hall_eval(app.rt, "return host_pulse()", result, sizeof(result)) ? atoi(result) : 0;
+}
+WEB_EXPORT void hall_device(int touch, int resume)
+{
+    hall_eval(app.rt, touch ? "TouchHall=true" : "TouchHall=false", NULL, 0);
+    if (resume)
+        hall_eval(app.rt, "game.state.feedback.resume=true", NULL, 0);
+}
 #ifndef __EMSCRIPTEN__
+static const char *preference_names[] = {"Motion",    "Detail",   "Sounds",        "Haptics",
+                                         "Hit marks", "Captions", "High contrast", "Reduced motion"};
 static bool SDLCALL settings_event(void *unused, SDL_Event *event)
 {
     (void)unused;
     hall_settings *s = &app.settings;
+    if (event->type == SDL_EVENT_KEY_DOWN && !s->open) {
+        SDL_Scancode key = event->key.scancode;
+        if ((key == SDL_SCANCODE_F3 && !event->key.repeat) ||
+            (key == SDL_SCANCODE_ESCAPE && app.preferences)) {
+            app.preferences = !app.preferences;
+            eng_platform_set_mouse_lock(eng_runtime_platform(app.rt), !app.preferences);
+            return true;
+        }
+        if (app.preferences) {
+            if (key == SDL_SCANCODE_UP || key == SDL_SCANCODE_DOWN || key == SDL_SCANCODE_TAB)
+                app.preference_row = (app.preference_row + (key == SDL_SCANCODE_UP ? 7 : 1)) % 8;
+            if (key == SDL_SCANCODE_LEFT || key == SDL_SCANCODE_RIGHT || key == SDL_SCANCODE_RETURN) {
+                int row = app.preference_row + 1, old = hall_tune(row, -1);
+                int value = row <= 4 ? SDL_clamp(old + (key == SDL_SCANCODE_LEFT ? -10 : 10), 0, 100) : !old;
+                hall_tune(row, value);
+            }
+            return true;
+        }
+    }
     if (event->type == SDL_EVENT_KEY_DOWN && event->key.scancode == SDL_SCANCODE_F2 && !event->key.repeat) {
         s->open = !s->open;
         SDL_Window *window = SDL_GetKeyboardFocus();
@@ -234,7 +279,7 @@ static void frame(void)
     }
     network();
     char error[512] = {0};
-    if (!app.settings.open && !eng_runtime_step(app.rt, dt, error, sizeof(error))) {
+    if (!app.settings.open && !app.preferences && !eng_runtime_step(app.rt, dt, error, sizeof(error))) {
         fprintf(stderr, "Simulation: %s\n", error);
         app.failed = true;
         return;
@@ -277,8 +322,23 @@ static void frame(void)
         snprintf(name, sizeof(name), "status%u", (unsigned)i);
         eng_ui_hud_label(app.ui, name, ENG_UI_TOP_LEFT, x, y, 640, 26, s);
     }
-    eng_ui_hud_label(app.ui, "aim", ENG_UI_CENTER, 0, 0, 20, 22, "+");
-    if (app.settings.open) {
+    if (!app.settings.open && !app.preferences)
+        hall_feedback_overlay(app.rt, app.ui, width, height);
+    if (app.preferences) {
+        eng_ui_hud_label(app.ui, "feedback", ENG_UI_CENTER, 0, -144, 410, 28,
+                         "Feedback    Arrows: adjust   Esc: close");
+        for (int i = 0; i < 8; i++) {
+            char label[128];
+            int value = hall_tune(i + 1, -1);
+            if (i < 4)
+                snprintf(label, sizeof(label), "%c %s   %d%%", app.preference_row == i ? '>' : ' ',
+                         preference_names[i], value);
+            else
+                snprintf(label, sizeof(label), "%c %s   %s", app.preference_row == i ? '>' : ' ',
+                         preference_names[i], value ? "On" : "Off");
+            eng_ui_hud_label(app.ui, preference_names[i], ENG_UI_CENTER, 0, -110 + 28 * i, 410, 28, label);
+        }
+    } else if (app.settings.open) {
         char e[455], r[90];
         snprintf(e, sizeof(e), "%c Service: %s", app.settings.field ? ' ' : '>', app.settings.endpoint);
         snprintf(r, sizeof(r), "%c Room: %s", app.settings.field ? '>' : ' ', app.settings.room);
@@ -287,8 +347,9 @@ static void frame(void)
         eng_ui_hud_label(app.ui, "endpoint", ENG_UI_CENTER, -260, -44, 550, 30, e);
         eng_ui_hud_label(app.ui, "room", ENG_UI_CENTER, -260, -10, 550, 30, r);
     } else
-        eng_ui_hud_label(app.ui, "controls", ENG_UI_BOTTOM_LEFT, 12, 12, 850, 26,
-                         "WASD move   Mouse fire   1-5 / Q snowcasters   R practice bell   F2 join friends");
+        eng_ui_hud_label(
+            app.ui, "controls", ENG_UI_BOTTOM_LEFT, 12, 12, 850, 26,
+            "WASD move   Mouse fire   1-5 / Q snowcasters   R practice   F2 join friends   F3 feedback");
     eng_ui_render(app.ui);
 #endif
     if (!app.xr)
@@ -312,8 +373,9 @@ WEB_EXPORT void hall_pack_ready(int day, int ok)
 WEB_EXPORT void hall_xr_end(void)
 {
     app.xr = false;
+    hall_pulse();
     eng_xr_end_session(eng_runtime_xr(app.rt));
-    hall_eval(app.rt, "host_xr(false);HostMoveX=0;HostMoveZ=0", NULL, 0);
+    hall_eval(app.rt, "host_xr(false);game.state.headYaw=nil;HostMoveX=0;HostMoveZ=0", NULL, 0);
     hall_action("fire", 0);
     hall_action("interact", 0);
     hall_action("practice", 0);
@@ -331,10 +393,12 @@ WEB_EXPORT void hall_xr_frame(int fbo, const float *mat, const int *vp, const fl
     char code[512];
     snprintf(code, sizeof(code),
              "host_xr(true,%f,%f,%f,%f,%f,%f,%f);"
-             "local a=math.rad(game.state.yaw+%f);HostMoveX=%f*math.cos(a)+%f*math.sin(a);"
+             "local g=game.state;local b=math.rad(g.yaw);g.eyeX=%f*math.cos(b)+%f*math.sin(b);"
+             "g.eyeY=%f;g.eyeZ=-%f*math.sin(b)+%f*math.cos(b);g.headYaw=g.yaw+%f;"
+             "local a=math.rad(g.headYaw);HostMoveX=%f*math.cos(a)+%f*math.sin(a);"
              "HostMoveZ=-%f*math.sin(a)+%f*math.cos(a)",
-             aim[0], aim[1] - 1.55, aim[2], aim[3], aim[4], aim[5], aim[8], aim[9], aim[6], aim[7], aim[6],
-             aim[7]);
+             aim[0], aim[1] - 1.55, aim[2], aim[3], aim[4], aim[5], aim[8], aim[11], aim[13], aim[12],
+             aim[11], aim[13], aim[9], aim[6], aim[7], aim[6], aim[7]);
     hall_eval(app.rt, code, NULL, 0);
     hall_action("fire", aim[10] > .5f);
     if (!app.failed)
@@ -344,6 +408,8 @@ int hall_client(eng_runtime_t *rt, const hall_options *opts)
 {
     app.rt = rt;
     app.headless = opts->headless;
+    app.preferences = false;
+    app.preference_row = 0;
     eng_input_t *input = eng_runtime_input(rt);
     for (int i = 0; i < 5; i++) {
         char action[8];
@@ -354,9 +420,8 @@ int hall_client(eng_runtime_t *rt, const hall_options *opts)
     eng_input_bind_key(input, "practice", SDL_SCANCODE_R);
     eng_xr_set_mode(eng_runtime_xr(rt), ENG_XR_FIRST_PERSON);
     app.audio = eng_audio_create(opts->headless);
-    const char *files[] = {"assets/throw.wav", "assets/bell.wav", "assets/poof.wav"};
-    for (int i = 0; i < 3; i++)
-        app.clips[i] = eng_audio_load_vfs(app.audio, eng_runtime_vfs(rt), files[i]);
+    hall_mix_load(&app.mix, rt, app.audio);
+    hall_tune(3, -1);
     hall_settings_read(&app.settings, rt, opts);
     if (*app.settings.endpoint)
         hall_connect(app.settings.endpoint, app.settings.room);

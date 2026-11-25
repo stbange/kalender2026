@@ -2,7 +2,7 @@
 
 **Start with one snowball hitting one visitor.** The player should feel the mitten move as soon as they throw, see where the snow lands, and know whose shot counted. In the current hall the bell is better at answering all three questions than the gingerbread or the snowman. Its body tips, a note plays and the score changes. This makes it a good reference for the rest of the shooter.
 
-Reviewed the public Web build on November 25, 2026, the released C and Lua paths, and the active hall specification on repository revision `05b081b`. The release code corresponds to `v0.1.0-hall`. All change entries below are proposals. [Play the hall](https://stbange.github.io/kalender2026/) · [Reviewed source](https://github.com/stbange/kalender2026/tree/05b081bdc40758eb9df7ebe2bed7b92978d4102a) · [Hall release](https://github.com/stbange/kalender2026/releases/tag/v0.1.0-hall)
+Reviewed the public Web build on November 25, 2026, the released C and Lua paths, and the active hall specification on repository revision `05b081b`. The release code corresponds to `v0.1.0-hall`. The ranked entries below describe that baseline. The five proposals have since been implemented in the 0.2.0 hall. [Implementation and verification](hall-feedback-verification.md) [Play the hall](https://stbange.github.io/kalender2026/) · [Reviewed source](https://github.com/stbange/kalender2026/tree/05b081bdc40758eb9df7ebe2bed7b92978d4102a) · [Hall release](https://github.com/stbange/kalender2026/releases/tag/v0.1.0-hall)
 
 ## What happened in play
 

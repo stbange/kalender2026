@@ -51,8 +51,8 @@ static void test_service(eng_runtime_t *server_rt, eng_runtime_t *client_rt)
         hall_eval(client_rt, "return game.state.connection", state, sizeof(state));
     }
     assert(!strcmp(state, "Live room"));
-    bqws_socket *original_socket=app.ws;
-    assert(hall_connect(url,"ctest") && app.ws==original_socket);
+    bqws_socket *original_socket = app.ws;
+    assert(hall_connect(url, "ctest") && app.ws == original_socket);
     hall_eval(client_rt, "game.state.outbox={'BELL','P 0 17 0'}", NULL, 0);
     for (int i = 0; i < 24; i++) {
         network();
@@ -60,11 +60,14 @@ static void test_service(eng_runtime_t *server_rt, eng_runtime_t *client_rt)
     }
     assert(hall_connect("", "ctest"));
     SDL_Delay(30);
-    assert(hall_eval(client_rt,"old_revision=Hall.version; Hall.version='old-protocol'",NULL,0));
-    assert(hall_connect(url,"ctest"));
-    for(int i=0;i<200 && app.ws;i++) { network();SDL_Delay(5); }
+    assert(hall_eval(client_rt, "old_revision=Hall.version; Hall.version='old-protocol'", NULL, 0));
+    assert(hall_connect(url, "ctest"));
+    for (int i = 0; i < 200 && app.ws; i++) {
+        network();
+        SDL_Delay(5);
+    }
     assert(!app.ws);
-    assert(hall_eval(client_rt,"Hall.version=old_revision",NULL,0));
+    assert(hall_eval(client_rt, "Hall.version=old_revision", NULL, 0));
     assert(hall_connect(url, "ctest"));
     network();
     raise(SIGINT);
@@ -103,10 +106,11 @@ int main(int argc, char **argv)
     char *client[] = {"hall",   "--root", root,         "--headless", "--frames", "1",
                       "--room", "cli",    "--endpoint", "",           "--save",   tmp};
     assert(run(12, client) == 0);
-    client[5]="3";client[9]="ws://127.0.0.1:1";
-    assert(run(12,client)==0);
-    char *absent[]={"hall","--root",tmp,"--serve"};
-    assert(run(4,absent)==1);
+    client[5] = "3";
+    client[9] = "ws://127.0.0.1:1";
+    assert(run(12, client) == 0);
+    char *absent[] = {"hall", "--root", tmp, "--serve"};
+    assert(run(4, absent) == 1);
     char *netfail[] = {"hall",     "--root", root, "--headless", "--ca", "/missing-calendar-ca.pem",
                        "--frames", "1"};
     assert(run(8, netfail) == 1);
@@ -150,6 +154,36 @@ int main(int argc, char **argv)
     app.rt = rt;
     app.ui = eng_ui_create();
     app.audio = eng_audio_create(true);
+    hall_mix_load(&app.mix, rt, app.audio);
+    assert(app.mix.count >= 24 && app.mix.clips[0].seconds > 0.03f);
+    assert(hall_tune(3, 60) == 60 && eng_audio_get_bus_gain(app.audio, ENG_BUS_SFX) > .59f);
+    assert(hall_tune(3, 100) == 100);
+    hall_device(1, 1);
+    hall_device(0, 0);
+    key(SDL_SCANCODE_F3, 0);
+    assert(app.preferences);
+    frame();
+    key(SDL_SCANCODE_LEFT, 0);
+    assert(hall_tune(1, -1) == 90);
+    key(SDL_SCANCODE_RIGHT, 0);
+    key(SDL_SCANCODE_UP, 0);
+    key(SDL_SCANCODE_RETURN, 0);
+    assert(hall_tune(8, -1) == 1);
+    key(SDL_SCANCODE_RETURN, 0);
+    key(SDL_SCANCODE_DOWN, 0);
+    key(SDL_SCANCODE_TAB, 0);
+    key(SDL_SCANCODE_ESCAPE, 0);
+    assert(!app.preferences && hall_tune(1, -1) == 100);
+    assert(hall_eval(rt,
+                     "local f=game.state.feedback; f.mark='ticks';f.markUntil=99;f.slow=true;f.tallyUntil=99",
+                     NULL, 0));
+    eng_ui_begin_frame(app.ui, 640, 480, 0, 0, false, 0);
+    hall_feedback_overlay(rt, app.ui, 640, 480);
+    eng_ui_render(app.ui);
+    assert(hall_eval(rt, "game.state.feedback.mark='finish'", NULL, 0));
+    eng_ui_begin_frame(app.ui, 960, 540, 0, 0, false, 0);
+    hall_feedback_overlay(rt, app.ui, 960, 540);
+    eng_ui_render(app.ui);
     assert(bqws_pt_init(NULL));
     hall_settings_text(&app.settings, "ws://127.0.0.1:1");
     hall_action("up", 1);
@@ -166,8 +200,21 @@ int main(int argc, char **argv)
     hall_connect("ws://127.0.0.1:1", "r");
     frame();
     hall_connect("", "r");
-    hall_eval(rt, "game.state.sounds={'throw','bell','poof'}", NULL, 0);
-    audio_frame(.01f);
+    assert(hall_eval(
+        rt, "local g=game.state;host_sound();for i=1,8 do Feedback.sound(g,'gear',.5,1,1,g.x,1,g.z) end",
+        NULL, 0));
+    audio_frame(1);
+    assert(app.mix.played >= 6 && app.mix.dropped >= 2);
+    assert(hall_eval(rt,
+                     "for i=1,3 do Feedback.sound(game.state,'bell',.6,1,3,0,1,0,18) end; "
+                     "Feedback.sound(game.state,'missing',1,1,2)",
+                     NULL, 0));
+    audio_frame(.001f);
+    assert(hall_mix_stat(0) == 8 && hall_mix_stat(1) >= 9 && hall_mix_stat(2) >= 2);
+    assert(hall_eval(rt, "orig_sound=host_sound;host_sound=function() return 'broken' end", NULL, 0));
+    audio_frame(.001f);
+    assert(hall_eval(rt, "host_sound=orig_sound", NULL, 0));
+    assert(hall_pulse() == 0);
     key(SDL_SCANCODE_F2, 0);
     assert(app.settings.open);
     frame();
@@ -197,16 +244,21 @@ int main(int argc, char **argv)
     for (int i = 0; i < 4; i++)
         for (int j = 0; j < 4; j++)
             eyes[i * 16 + j * 5] = 1;
-    float aim[11] = {0, 1.55f, 0, 0, 0, -1, 0, 0, 30, 0, 1};
+    float aim[14] = {0, 1.55f, 0, 0, 0, -1, 0, 0, 30, 0, 1};
     hall_xr_frame(0, eyes, views, aim);
     assert(eng_xr_is_active(eng_runtime_xr(rt)));
     hall_xr_end();
     assert(!eng_xr_is_active(eng_runtime_xr(rt)));
-    assert(hall_eval(rt,"unit_update=update; update=function() error('unit update failure') end",NULL,0));
-    frame();assert(app.failed);app.failed=false;
-    assert(hall_eval(rt,"update=unit_update; unit_draw=draw; draw=function() error('unit draw failure') end",NULL,0));
-    frame();assert(app.failed);app.failed=false;
-    assert(hall_eval(rt,"draw=unit_draw",NULL,0));
+    assert(hall_eval(rt, "unit_update=update; update=function() error('unit update failure') end", NULL, 0));
+    frame();
+    assert(app.failed);
+    app.failed = false;
+    assert(hall_eval(rt, "update=unit_update; unit_draw=draw; draw=function() error('unit draw failure') end",
+                     NULL, 0));
+    frame();
+    assert(app.failed);
+    app.failed = false;
+    assert(hall_eval(rt, "draw=unit_draw", NULL, 0));
     eng_audio_destroy(app.audio);
     eng_ui_destroy(app.ui);
     bqws_pt_shutdown();

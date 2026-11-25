@@ -1,7 +1,34 @@
 -- Shared by the local game, the room service and the unit tests.
 Hall = {}
 local H = Hall
-H.version = "lantern-1"
+H.version = "lantern-2"
+H.event =
+    { launch = 1, hit = 2, clear = 3, bell = 4, bounce = 5, wall = 6, burst = 7, practice = 8, waveClear = 9 }
+H.history = 32
+
+-- Presentation facts follow the same contact decision as the authoritative score.
+local function record(r, code, shot, target, x, y, z, value)
+    r.eventId = r.eventId + 1
+    local e = {
+        id = r.eventId,
+        time = r.time,
+        code = code,
+        target = target,
+        x = x,
+        y = y,
+        z = z,
+        value = value or 0,
+        owner = shot and shot.owner or 0,
+        seat = shot and shot.seat or 0,
+        seq = shot and shot.seq or 0,
+        ball = shot and shot.id or 0,
+        weapon = shot and shot.kind or 0,
+    }
+    if #r.events == H.history then
+        table.remove(r.events, 1)
+    end
+    r.events[#r.events + 1] = e
+end
 H.spawn = { x = 0, z = 17 }
 H.limit = 23.6
 H.speed = 5.3
@@ -90,6 +117,9 @@ function H.new(days)
         wave = 0,
         clears = 0,
         serial = 0,
+        eventId = 0,
+        events = {},
+        nextSeat = 0,
         instances = {},
         next_run = 0,
     }
@@ -97,7 +127,10 @@ function H.new(days)
     return r
 end
 function H.join(r, id)
+    r.nextSeat = r.nextSeat + 1
     r.players[id] = {
+        id = id,
+        seat = r.nextSeat,
         x = H.spawn.x + (id - 1) * 0.45,
         z = H.spawn.z,
         yaw = 0,
@@ -197,32 +230,43 @@ function H.practice(r)
         end
     end
     H.wave(r)
+    record(r, H.event.practice, nil, r.wave, 0, 1.5, -13)
     return true
 end
-local function damage(r, m, amount)
+local function damage(r, m, s, x, y, z)
     if m.hp <= 0 or m.wake > r.time then
         return
     end
-    m.hp = math.max(0, m.hp - amount)
+    m.hp = math.max(0, m.hp - s.power)
+    local angle = math.deg(math.atan2(s.vx, s.vz))
+    record(r, m.hp == 0 and H.event.clear or H.event.hit, s, m.kind, x, y, z, angle)
     if m.hp == 0 then
         r.clears = r.clears + 1
+        for _, other in pairs(r.mobs) do
+            if other.hp > 0 then
+                return
+            end
+        end
+        record(r, H.event.waveClear, s, r.wave, 0, 1.5, -13)
     end
 end
-local function ring(r, i)
+local function ring(r, i, s, x, y, z)
     if r.targets[i] <= r.time then
         r.targets[i] = r.time + 1.2
         r.hits = r.hits + 1
+        record(r, H.event.bell, s, i, x, y, z)
     end
 end
 local function burst(r, s)
+    record(r, H.event.burst, s, 0, s.x, s.y, s.z, s.splash)
     for _, m in pairs(r.mobs) do
         if (m.x - s.x) ^ 2 + (m.y - s.y) ^ 2 + (m.z - s.z) ^ 2 < s.splash ^ 2 then
-            damage(r, m, s.power)
+            damage(r, m, s, m.x, m.y, m.z)
         end
     end
     for i, t in ipairs(H.targets) do
         if (t[1] - s.x) ^ 2 + (t[2] - s.y) ^ 2 + (t[3] - s.z) ^ 2 < s.splash ^ 2 then
-            ring(r, i)
+            ring(r, i, s, t[1], t[2], t[3])
         end
     end
 end
@@ -242,6 +286,8 @@ function H.fire(r, p, seq, weapon, dx, dy, dz, ox, oy, oz)
             id = r.serial,
             kind = weapon,
             owner = p.id,
+            seat = p.seat,
+            seq = seq,
             x = p.x + (ox or 0),
             y = 1.55 + (oy or 0),
             z = p.z + (oz or 0),
@@ -254,6 +300,8 @@ function H.fire(r, p, seq, weapon, dx, dy, dz, ox, oy, oz)
             life = 3,
         }
     end
+    local launch = r.shots[#r.shots]
+    record(r, H.event.launch, launch, 0, launch.x, launch.y, launch.z)
     return true
 end
 local function projectile(r, s, dt)
@@ -270,7 +318,7 @@ local function projectile(r, s, dt)
             and (m.x - s.x) ^ 2 + (m.y - s.y) ^ 2 + (m.z - s.z) ^ 2 < 0.82 ^ 2
         then
             if not s.splash then
-                damage(r, m, s.power)
+                damage(r, m, s, s.x, s.y, s.z)
             end
             impact = true
             break
@@ -281,7 +329,7 @@ local function projectile(r, s, dt)
             if
                 r.targets[i] <= r.time and (t[1] - s.x) ^ 2 + (t[2] - s.y) ^ 2 + (t[3] - s.z) ^ 2 < 0.8 ^ 2
             then
-                ring(r, i)
+                ring(r, i, s, s.x, s.y, s.z)
                 impact = true
                 break
             end
@@ -289,6 +337,7 @@ local function projectile(r, s, dt)
     end
     local limit = 23.7
     if not impact and (math.abs(s.x) > limit or math.abs(s.z) > limit or s.y < 0.18 or s.y > 9) then
+        local plane = math.abs(s.x) > limit and 1 or (math.abs(s.z) > limit and 3 or 2)
         if s.bounces > 0 then
             if math.abs(s.x) > limit then
                 s.vx = -s.vx
@@ -303,7 +352,10 @@ local function projectile(r, s, dt)
                 s.y = H.clamp(s.y, 0.18, 9)
             end
             s.bounces = s.bounces - 1
+            record(r, H.event.bounce, s, plane, s.x, s.y, s.z, H.weapons[s.kind].bounce - s.bounces)
         else
+            s.x, s.y, s.z = H.clamp(s.x, -limit, limit), H.clamp(s.y, 0.18, 9), H.clamp(s.z, -limit, limit)
+            record(r, H.event.wall, s, plane, s.x, s.y, s.z)
             impact = true
         end
     end
