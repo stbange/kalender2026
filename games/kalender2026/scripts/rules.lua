@@ -80,6 +80,14 @@ end
 function H.move(x, z, dx, dz, space)
     local limit = space == 0 and H.limit or 7.5
     x, z = H.clamp(x + dx, -limit, limit), H.clamp(z + dz, -limit, limit)
+    if space == 0 and x < -21.20 and math.abs(z) < 2.36 then
+        -- Slide around the raised hearthstone, including a saved pose inside its footprint.
+        if -21.20 - x <= 2.36 - math.abs(z) then
+            x = -21.20
+        else
+            z = z < 0 and -2.36 or 2.36
+        end
+    end
     if space == 0 and x * x + z * z < 2.25 ^ 2 then
         local length = math.sqrt(x * x + z * z)
         if length < 0.001 then

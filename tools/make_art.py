@@ -8,6 +8,8 @@ import wave
 import zlib
 from pathlib import Path
 
+from make_holiday_art import build_holiday_art
+
 OUT = Path(__file__).resolve().parents[1] / "games/kalender2026/assets"
 OUT.mkdir(exist_ok=True, parents=True)
 rng = random.Random(20261201)
@@ -91,7 +93,7 @@ class Model:
         self.verts = []
         self.transform = None
 
-    def face(self, points, c):
+    def face(self, points, c, uv=None):
         if self.transform:
             points = [self.transform(*p) for p in points]
         a, b, d = points[:3]
@@ -100,8 +102,9 @@ class Model:
         n = [ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]]
         length = math.sqrt(sum(x * x for x in n)) or 1
         for i in range(1, len(points) - 1):
-            for p in (points[0], points[i], points[i + 1]):
-                self.verts.append((*p, *(v / length for v in n), (c + 0.5) / 32, 0.5))
+            for j in (0, i, i + 1):
+                coords = uv[j] if uv is not None else ((c + 0.5) / 32, 0.5)
+                self.verts.append((*points[j], *(v / length for v in n), *coords))
 
     def box(self, x, y, z, w, h, d, c):
         a, b = x - w / 2, x + w / 2
@@ -153,9 +156,17 @@ class Model:
             j = (i + 1) % 4
             self.face([rings[0][i], rings[1][i], rings[1][j], rings[0][j]], c)
 
-    def save(self, name):
-        n = len(self.verts)
-        data = b"".join(struct.pack("<8f", *v) for v in self.verts)
+    def save(self, name, indexed=False, casts=False):
+        vertices = [struct.pack("<8f", *v) for v in self.verts]
+        if indexed or casts:
+            lookup = {v: i for i, v in enumerate(dict.fromkeys(vertices))}
+            indices = [lookup[v] for v in vertices]
+            vertices = list(lookup)
+            if casts:
+                # Unreferenced bounds keep an offscreen visitor's projected silhouette in the draw list.
+                vertices.extend(struct.pack("<8f", b, b, b, 0, 1, 0, 0, 0) for b in (-12, 12))
+        n = len(vertices)
+        data = b"".join(vertices)
         doc = {
             "asset": {"version": "2.0"},
             "buffers": [{"byteLength": len(data)}],
@@ -169,6 +180,15 @@ class Model:
             "scenes": [{"nodes": [0]}],
             "scene": 0,
         }
+        if indexed or casts:
+            code, component = ("H", 5123) if n <= 65536 else ("I", 5125)
+            packed = struct.pack(f"<{len(indices)}{code}", *indices)
+            doc["bufferViews"].append({"buffer": 0, "byteOffset": len(data), "byteLength": len(packed)})
+            doc["accessors"].append({"bufferView": 1, "componentType": component, "count": len(indices), "type": "SCALAR"})
+            doc["meshes"][0]["primitives"][0]["indices"] = 3
+            data += packed
+            doc["buffers"][0]["byteLength"] = len(data)
+            data += bytes(-len(data) % 4)
         desc = json.dumps(doc, separators=(",", ":")).encode()
         desc += b" " * (-len(desc) % 4)
         (OUT / (name + ".glb")).write_bytes(
@@ -193,24 +213,38 @@ digits = [
     "111101111001111",
 ]
 hall = Model()
+numerals = Model()
 b = hall.box
-# Checkered stone, two woven aisles, and inlaid borders.
-for i in range(16):
-    for j in range(16):
-        b(i * 3 - 22.5, -0.12, j * 3 - 22.5, 3, 0.22, 3, 1 + ((i + j) % 2))
-b(0, 0.012, 0, 5.6, 0.035, 47.6, 11)
-b(0, 0.035, 0, 47.6, 0.035, 4.5, 11)
-for side in (-1, 1):
-    b(side * 2.48, 0.042, 0, 0.12, 0.03, 47.6, 15)
-    b(0, 0.064, side * 1.95, 47.6, 0.03, 0.12, 15)
-for i in range(-10, 11):
-    b(0, 0.07, i * 2.15, 0.22, 0.035, 0.22, 16)
 for wing, rotation in enumerate((90, 0, -90, 180)):
     angle = math.radians(rotation)
     cs, sn = round(math.cos(angle)), round(math.sin(angle))
     hall.transform = lambda x, y, z, c=cs, s=sn: (c * x + s * (z - 24), y, -s * x + c * (z - 24))
+    numerals.transform = hall.transform
     color = (11, 19, 24, 28)[wing]
-    b(0, 6.8, -0.2, 48, 5, 0.65, color)
+    # Open clerestory apertures through the wall, with solid piers between the windows.
+    b(0, 4.80, -0.2, 48, 1.0, 0.65, color)
+    b(0, 8.43, -0.2, 48, 1.74, 0.65, color)
+    edge = -24
+    for i in range(6):
+        center = (i - 2.5) * 7
+        start = center - 1.55
+        b((edge + start)/2, 6.43, -.2, start-edge, 2.26, .65, color)
+        edge = center + 1.55
+    b((edge+24)/2, 6.43, -.2, 24-edge, 2.26, .65, color)
+    # Transoms close the portal arches. Low corner windows frame the landscape at eye level.
+    b(0, 3.62, -.35, 42.12, 1.46, .24, 6)
+    for side in (-1, 1):
+        cx = side * 22.53
+        b(cx, .52, -.2, 2.96, 1.04, .58, 6)
+        b(cx, 4.04, -.2, 2.96, .74, .58, 6)
+        for end in (-1, 1):
+            b(cx + end * 1.23, 2.35, -.2, .5, 2.65, .58, 6)
+            b(cx + end * 1.00, 2.35, .14, .10, 2.72, .24, 8)
+        b(cx, 1.02, .21, 2.30, .13, .43, 9)
+        b(cx, 1.10, -.28, 2.10, .08, .31, 27)
+        b(cx, 3.64, .16, 2.13, .13, .24, 8)
+        b(cx, 2.34, .12, .055, 2.55, .15, 8)
+        b(cx, 2.49, .12, 2.01, .066, .14, 8)
     b(0, 8.9, 0.14, 48, 0.3, 0.65, 14)
     b(0, 4.8, 0.15, 48, 0.25, 0.55, 8)
     for i in range(6):
@@ -236,7 +270,7 @@ for wing, rotation in enumerate((90, 0, -90, 180)):
         for g, ch in enumerate(f"{d:02}"):
             for k, on in enumerate(digits[int(ch)]):
                 if on == "1":
-                    b(
+                    numerals.box(
                         x + (g * 4 + k % 3 - 3) * 0.143,
                         3.55 - (k // 3) * 0.133,
                         0.325,
@@ -246,17 +280,20 @@ for wing, rotation in enumerate((90, 0, -90, 180)):
                         16,
                     )
         # Snowy clerestory, mullions and garlands.
-        b(x, 6.43, 0.21, 3.1, 2.25, 0.14, 23)
-        b(x, 6.43, 0.31, 2.79, 2.02, 0.1, 25)
-        b(x, 6.43, 0.39, 0.12, 2.05, 0.12, 14)
-        b(x, 6.40, 0.39, 2.85, 0.1, 0.12, 14)
+        for side in (-1, 1):
+            b(x+side*1.52,6.43,.19,.12,2.32,.28,8)
+            b(x,6.43+side*1.09,.19,3.14,.12,.28,8)
+        b(x,5.26,.27,3.35,.13,.43,9)
+        b(x,5.37,-.23,3.08,.07,.32,27)
+        b(x,6.43,.20,.085,2.10,.13,14)
+        b(x,6.4,.20,3.02,.078,.13,14)
         for j in range(9):
             xx = x + (j - 4) * 0.77
             yy = 5.08 + 0.68 * ((j - 4) / 4) ** 2
             hall.cone(xx, yy - 0.22, 0.57, 0.41, 0.27, 0.44, 18 + j % 3, 6)
             if j % 2:
                 b(xx, yy - 0.27, 0.87, 0.18, 0.20, 0.18, (12, 16)[j % 3 == 0])
-    for x in (-22.8, 22.8):
+    for x in (-23.67, 23.67):
         b(x, 3.4, 0.3, 0.75, 6.8, 0.85, 7)
 hall.transform = None
 # Tall timber roof with trusses and hanging lanterns.
@@ -279,54 +316,14 @@ for z in (-20, -12, -4, 4, 12, 20):
     b(0, 8.3, z, 47.8, 0.32, 0.40, 6)
 for x in (-18, -10, 0, 10, 18):
     b(x, 13.6 - abs(x) * 0.23, 0, 0.4, 0.35, 48, 7)
-for z in (-13, 10):
-    b(0, 8.3, z, 0.10, 3, 0.10, 14)
-    hall.cone(0, 6.55, z, 2.0, 2.0, 0.14, 15, 12)
-    for k in range(8):
-        ang = math.pi * k / 4
-        x, dz = 1.95 * math.cos(ang), 1.95 * math.sin(ang)
-        b(x, 6.9, z + dz, 0.18, 0.47, 0.18, 5)
-        b(x, 7.18, z + dz, 0.13, 0.16, 0.13, 16)
-# Voxel spruce assembled on a square grid; alternating snow-capped boughs.
-hall.cone(0, 0, 0, 2.28, 2.28, 0.39, 14, 16)
-b(0, 1, 0, 0.78, 2, 0.78, 7)
-for k in range(15):
-    y = 1 + k * 0.40
-    rad = (15 - k) * 0.205 * (1 if k % 3 != 2 else 0.86)
-    for ix in range(-7, 8):
-        for iz in range(-7, 8):
-            x, z = ix * 0.45, iz * 0.45
-            if (
-                x * x + z * z <= rad * rad
-                and (abs(x) + 0.44) ** 2 + (abs(z) + 0.44) ** 2 >= max(0, rad - 0.8) ** 2
-            ):
-                b(x, y, z, 0.46, 0.44, 0.46, 19 + (ix + iz + k) % 3)
-                if (ix * 7 + iz * 5 + k) % 5 == 0:
-                    b(x, y + 0.21, z, 0.45, 0.08, 0.45, 27)
-for k in range(46):
-    y = 1.2 + 5.1 * k / 46
-    radius = (7 - y) * 0.54
-    x, z = radius * math.cos(k * 0.59), radius * math.sin(k * 0.59)
-    hall.cone(x, y, z, 0.12, 0.095, 0.17, (12, 16, 30, 26)[k % 4], 6)
-for side in (0, math.pi):
-    star = []
-    for j in range(10):
-        ang = math.pi / 2 + j * math.pi / 5
-        rad = 0.67 if j % 2 == 0 else 0.28
-        star.append((math.cos(ang) * rad, 7.37 + math.sin(ang) * rad, 0.03 * math.cos(side)))
-    for j in range(10):
-        hall.face([(0, 7.37, 0.18 * math.cos(side)), star[j], star[(j + 1) % 10]], 16)
+# Wrapped presents beneath the spruce.
 for k in range(13):
     a = k * 2.4
     x, z = 2.45 * math.cos(a), 2.45 * math.sin(a)
     size = 0.43 + (k % 3) * 0.15
     b(x, size / 2, z, size, size, size, (11, 19, 24, 28)[k % 4])
     b(x, size / 2, z, size * 0.20, size + 0.04, size + 0.04, 15)
-# Hearth, workshop train, frosted conservatory and clock gallery.
-for y in range(4):
-    for z in range(5):
-        b(-21.9, y * 0.36 + 0.18, -2 + z * 0.77 + (0.22 if y % 2 else 0), 0.58, 0.33, 0.73, 7 + y % 2)
-b(-21.5, 1.52, 0, 1.35, 0.22, 4.7, 9)
+# Workshop train, frosted conservatory and clock gallery.
 for i in range(4):
     b(-7 + i * 1.4, 4.95, -22.8, 1.24, 0.60, 0.72, (12, 15, 20, 24)[i])
     for j in (-1, 1):
@@ -344,7 +341,9 @@ hall.transform = None
 for x, y, z in ((-5, 1.8, -14), (-2.6, 2.45, -16), (0, 1.85, -15), (2.6, 2.45, -16), (5, 1.8, -14)):
     b(x, 0.58, z, 0.19, 1.16, 0.19, 8)
     b(x, 0.09, z, 0.92, 0.16, 0.7, 7)
-hall.save("great-hall")
+hall.save("great-hall", indexed=True)
+numerals.save("door-numerals", indexed=True)
+build_holiday_art(OUT, Model, png, hall)
 
 for kind in ("snowman", "gingerbread", "penguin", "guard", "wisp", "friend"):
     m = Model()
@@ -354,7 +353,7 @@ for kind in ("snowman", "gingerbread", "penguin", "guard", "wisp", "friend"):
         limb.beam((0, 0, 0), tuple(end[i] - start[i] for i in range(3)), width, color)
         if stripe:
             limb.box(*(0.76 * (end[i]-start[i]) for i in range(3)), width*1.06, 0.055, width*1.06, 5)
-        limb.save(f"{kind}-{name}")
+        limb.save(f"{kind}-{name}", casts=True)
     if kind == "snowman":
         m.cone(0, -0.92, 0, 0.52, 0.44, 0.75, 27)
         m.cone(0, -0.2, 0, 0.40, 0.34, 0.54, 31)
@@ -386,7 +385,7 @@ for kind in ("snowman", "gingerbread", "penguin", "guard", "wisp", "friend"):
             skate = Model()
             skate.box(0,0,0.13,0.38,0.16,0.65,15)
             skate.box(0,-0.10,0.13,0.06,0.08,0.67,4)
-            skate.save("penguin-"+tag+"-leg")
+            skate.save("penguin-"+tag+"-leg", casts=True)
             part(tag+"-arm",(0,0,0),(s*0.28,-0.55,0),0.20,1)
     elif kind in ("guard", "friend"):
         for s in (-1, 1):
@@ -398,11 +397,11 @@ for kind in ("snowman", "gingerbread", "penguin", "guard", "wisp", "friend"):
                 leg = Model()
                 leg.box(0,-0.31,0,0.24,0.62,0.29,1)
                 leg.box(0,-0.58,0.065,0.28,0.16,0.38,0)
-                leg.save("guard-"+tag+"-leg")
+                leg.save("guard-"+tag+"-leg", casts=True)
                 arm = Model()
                 arm.box(0,-0.30,0,0.19,0.60,0.24,12)
                 arm.box(0,-0.47,0,0.20,0.08,0.25,15)
-                arm.save("guard-"+tag+"-arm")
+                arm.save("guard-"+tag+"-arm", casts=True)
         b(0, 0.01, 0, 0.55, 0.74, 0.37, 11 if kind == "guard" else 20)
         b(0, 0.45, 0, 0.43, 0.4, 0.39, 9)
         b(0, 0.85, 0, 0.54, 0.45, 0.50, 1 if kind == "guard" else 20)
@@ -425,7 +424,7 @@ for kind in ("snowman", "gingerbread", "penguin", "guard", "wisp", "friend"):
             0.075,
             0 if kind != "penguin" else 31,
         )
-    m.save(kind)
+    m.save(kind, casts=True)
 
 for i, name in enumerate(("pistol", "fan", "spinner", "bank", "rocket")):
     m = Model()

@@ -55,6 +55,7 @@ jobs:
           python tests/lua_coverage.py | tee reports/lua-units.txt
           python tests/coverage_guard.py
           python tests/feedback_art_test.py
+          python tests/holiday_art_test.py
           ctest --test-dir build-cov --output-on-failure
           build-cov/lantern --root . --fixture tests/fixture --headless --doctor
       - name: Package release Linux client and room
@@ -80,6 +81,7 @@ jobs:
           python tests/browser_smoke.py --site dist/web --binary build/lantern
           python tests/content_test.py --binary build/lantern --web-build build-web
           python tests/visual_check.py --site dist/web --out reports/views
+          python tests/holiday_scene.py --site dist/web --out reports/views/winter
           python tests/visitor_animation.py --site dist/web --out reports/views/visitors.webp
           tar -C dist/web -czf lantern-web.tar.gz .
       - uses: actions/upload-artifact@v4

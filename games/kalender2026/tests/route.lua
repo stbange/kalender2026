@@ -1,5 +1,6 @@
 -- Walk the complete numbered gallery using the same movement actions as a player.
 local day, wall = 1, 0
+local aroundHearth = { { -20.6, 3.5 }, { -20.6, -3.5 } }
 local function move(x, z)
     eng.input.inject("left", x < -0.18)
     eng.input.inject("right", x > 0.18)
@@ -11,8 +12,14 @@ function playtest_frame()
     local g = game.state
     if day <= 24 then
         local x, z = Hall.door(day)
+        local corner = day == 4 and aroundHearth[1]
+        if corner then x, z = corner[1], corner[2] end
         if (x - g.x) ^ 2 + (z - g.z) ^ 2 < 0.28 ^ 2 then
-            day = day + 1
+            if corner then
+                table.remove(aroundHearth, 1)
+            else
+                day = day + 1
+            end
             move(0, 0)
         else
             move(x - g.x, z - g.z)

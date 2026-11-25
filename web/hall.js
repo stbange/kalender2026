@@ -290,8 +290,13 @@ window.addEventListener("pageshow", (e) => {
     call("connect", ["string", "string"], [settings.endpoint, settings.room], "number");
 });
 function resize() {
-  if (ready)
-    call("resize", ["number", "number"], [Math.round(canvas.clientWidth), Math.round(canvas.clientHeight)]);
+  if (!ready) return;
+  const width = canvas.parentElement.clientWidth;
+  const height = canvas.parentElement.clientHeight;
+  const scale = Math.min(1, 960 / Math.max(width, height), 540 / Math.min(width, height));
+  const bufferWidth = Math.max(1, Math.round(width * scale));
+  const bufferHeight = Math.max(1, Math.round(height * scale));
+  call("resize", ["number", "number"], [bufferWidth, bufferHeight]);
 }
 window.addEventListener("resize", () => {
   resetInput();

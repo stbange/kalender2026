@@ -1,9 +1,9 @@
-The Lantern Hall 0.3.0 moves multiplayer to the updated engine. Windows, Linux, browsers and WebXR share the engine’s binary WebSocket format. Each room accommodates eight friends. The Linux service can host six full rooms.
+The Lantern Hall 0.4.0 brings winter night to the galleries. The hearth, candles and string lights illuminate the hall. The log fire and entrance chandelier cast shadows from the furnishings and passing visitors. Frosted sills frame a starry sky, snowy slopes and a nearer band of fir trees.
 
-Upgrade the Linux room service and the clients together. Enter the same room code and service URL in **Join friends** or in the native **F2** panel. Private-CA hosts can still use `--ca`. Room addresses, feedback preferences and ornaments are saved on the player’s device.
+The west fireplace has a carved mantel, stockings, glowing logs and a layered flame. The tree has individual spruce sprays, baubles and five colors of glass bulbs. The fire holds steady with reduced motion enabled. The Web game renders the world within 960 × 540 in landscape and keeps the interface at display resolution. WebXR uses each eye’s requested framebuffer.
 
-- Extract the Windows or Linux client archive and launch Lantern, or [play the Web edition](https://stbange.github.io/kalender2026/).
-- Extract the Linux room archive and run `./lantern --server --port 8787`. The included Caddy and systemd examples support public secure invites.
-- The Web archive can be served from HTTPS or localhost. Scripts, art and sounds are editable alongside each build.
+- Unpack the Windows or Linux client and launch Lantern. [Play the Web edition](https://stbange.github.io/kalender2026/)
+- For shared play, unpack the matching Linux room service and run `./lantern --server --port 8787`. Enter its secure WebSocket address and your room code in **Join friends**. The existing service settings and invitations carry forward.
+- The Web archive runs on localhost or HTTPS. Scripts, shaders, models, textures and sounds are editable loose files.
 
 Original code uses MIT. Original art and audio use CC BY 4.0.

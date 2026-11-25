@@ -32,6 +32,23 @@ local function object(name, model, x, y, z, pocket, opt)
     return e
 end
 local pos, rot, scale = eng and eng.scene.set_pos, eng and eng.scene.set_rot_deg, eng and eng.scene.set_scale
+local lampColors = {
+    amber = { 1.8, 0.66, 0.095 },
+    ruby = { 1.4, 0.027, 0.012 },
+    green = { 0.026, 1.02, 0.17 },
+    blue = { 0.047, 0.31, 1.65 },
+    rose = { 1.28, 0.06, 0.39 },
+    flame = { 2.9, 1.23, 0.23 },
+    coal = { 0.77, 0.060, 0.008 },
+    star = { 0.75, 0.30, 0.045 },
+}
+-- The forward shader recognizes the floor (-2) and projected silhouettes (-3).
+local function shadowed(name, model, x, y, z)
+    local body = object(name, model, x, y, z)
+    local shadow = object(name .. " shadow", model, 0, 0, 0, 0, W.shadowMaterial)
+    eng.scene.set_parent(shadow, body)
+    return body, shadow
+end
 function W.build()
     W.palette = eng.asset.load_texture("assets/palette.png", true)
     W.snow = eng.asset.load_texture("assets/snow.png", true)
@@ -62,17 +79,93 @@ function W.build()
     W.fxTextures.ring = W.fxTextures.powder
     W.box = eng.asset.box(1, 1, 1)
     W.wreath = eng.asset.voxel_ascii({ "02220", "22022", "20002", "22022", "02220" }, 5, 5, 1, 0.13)
+    W.floorTex = eng.asset.load_texture("assets/hall-floor.png", true)
+    W.shadowMaterial = { tex = W.floorTex, metallic = -3, roughness = 0.94, cast_shadow = false }
+    object(
+        "Flagstones and runners",
+        mesh("hall-floor"),
+        0,
+        0,
+        0,
+        0,
+        { tex = W.floorTex, metallic = -2, roughness = 0.94, cast_shadow = false }
+    )
     object("Timber galleries", mesh("great-hall"), 0, 0, 0)
-    eng.render.set_sky(0.018, 0.035, 0.085, 0.14, 0.25, 0.33, 0.10, 0.14, 0.13)
-    eng.render.add_light({
-        type = "dir",
-        dir = { -0.35, -0.9, -0.4 },
-        color = { 1.6, 1.47, 1.28 },
-        shadow = false,
-    })
-    eng.render.add_light({ type = "point", pos = { 0, 5, 1 }, color = { 2.4, 1.75, 0.8 }, range = 19 })
-    eng.render.add_light({ type = "point", pos = { -19, 2.5, 0 }, color = { 2.7, 1.0, 0.35 }, range = 14 })
-    eng.render.add_light({ type = "point", pos = { 11, 6, -10 }, color = { 0.7, 1.2, 2.0 }, range = 22 })
+    object(
+        "Brass portal numerals",
+        mesh("door-numerals"),
+        0,
+        0,
+        0,
+        0,
+        { tex = W.palette, roughness = 0.65, emissive = { 0.115, 0.062, 0.021 } }
+    )
+    object(
+        "Christmas mantel and fixtures",
+        mesh("christmas-fittings"),
+        0,
+        0,
+        0,
+        0,
+        { tex = W.palette, metallic = -1, roughness = 0.85, cast_shadow = false }
+    )
+    object(
+        "Norway spruce sprays",
+        mesh("spruce-boughs"),
+        0,
+        0,
+        0,
+        0,
+        { tex = eng.asset.load_texture("assets/spruce-spray.png", true), metallic = -1, roughness = 0.93 }
+    )
+    object(
+        "Firebrick",
+        mesh("hearth-masonry"),
+        0,
+        0,
+        0,
+        0,
+        { tex = eng.asset.load_texture("assets/hearth-brick.png", true), metallic = -1, roughness = 0.95 }
+    )
+    for name, glow in pairs({
+        ["winter-ridges"] = { 0.019, 0.041, 0.090 },
+        ["winter-snow"] = { 0.087, 0.151, 0.224 },
+        ["winter-pines"] = { 0.005, 0.013, 0.022 },
+    }) do
+        object(name, mesh(name), 0, 0, 0, 0, { emissive = glow, roughness = 1, cast_shadow = false })
+    end
+    object(
+        "Glass baubles",
+        mesh("glass-ornaments"),
+        0,
+        0,
+        0,
+        0,
+        { tex = W.palette, metallic = 0.46, roughness = 0.22 }
+    )
+    for name, color in pairs(lampColors) do
+        object(
+            name .. " glass",
+            mesh("lamp-" .. name),
+            0,
+            0,
+            0,
+            0,
+            { tex = W.palette, emissive = color, roughness = 0.34 }
+        )
+    end
+    W.glow = eng.asset.load_texture("assets/lamp-halo.png", true)
+    W.fireFrames = {}
+    for i = 1, 16 do
+        W.fireFrames[i] = eng.asset.load_texture(string.format("assets/hearth-fire-%02d.png", i), true)
+    end
+    eng.render.set_sky(0.004, 0.007, 0.015, 0.016, 0.019, 0.032, 0.011, 0.008, 0.007)
+    for i, lamp in ipairs(HallLights) do
+        local handle = eng.render.add_light(lamp)
+        if i == 1 then
+            W.fireLight = handle
+        end
+    end
     for day = 1, 24 do
         local x, z, ix, iz = Hall.door(day)
         local yaw = math.deg(math.atan2(ix, iz))
@@ -126,14 +219,15 @@ function W.build()
         end
     end
     for i, m in ipairs(Hall.visitors) do
-        W.mobs[i] = object(m.name, mesh(m.file), 0, -40, 0)
-        W.joints[i] = Visitors.build(i, W.mobs[i], object, mesh)
+        W.mobs[i] = shadowed(m.name, mesh(m.file), 0, -40, 0)
+        W.joints[i] = Visitors.build(i, W.mobs[i], shadowed, mesh)
     end
     for i, t in ipairs(Hall.targets) do
         W.bells[i] = object("Range bell " .. i, mesh("bell"), t[1], t[2], t[3])
     end
+    W.friendShadows = {}
     for i = 1, 8 do
-        W.friends[i] = object("Friend " .. i, mesh("friend"), 0, -40, 0)
+        W.friends[i], W.friendShadows[i] = shadowed("Friend " .. i, mesh("friend"), 0, -40, 0)
     end
     W.gun = object("Snowcaster", mesh("pistol"), 0, -40, 0)
     scale(W.gun, 0.56, 0.56, 0.56)
@@ -216,6 +310,10 @@ function W.update(g, dt)
     local f = g.feedback
     f.quietWake = false
     local motion = f.prefs[1] / 100
+    local burn = g.clock * motion
+    local heat = 1 + (0.045 * math.sin(burn * 5.1) + 0.035 * math.sin(burn * 9.7)) * motion
+    local fire = HallLights[1].color
+    eng.render.set_light(W.fireLight, { color = { fire[1] * heat, fire[2] * heat, fire[3] * heat } })
     for i, e in ipairs(W.bells) do
         local remaining = (r.targets[i] or 0) - r.time
         local tilt = 0
@@ -240,6 +338,7 @@ function W.update(g, dt)
                 blend = 1
             end
             eng.scene.set_pocket(e, W.pockets[p.space] or 0)
+            eng.scene.set_pocket(W.friendShadows[i], W.pockets[p.space] or 0)
             pos(e, x + (p.x - x) * blend, 1, z + (p.z - z) * blend)
             rot(e, 0, p.yaw + 180, 0)
         else
@@ -395,7 +494,59 @@ function W.sprites(g)
         local z = ((n * 13) % 43) - 21
         eng.render.draw_sprite(x, 6.7 - (t * 0.42 + n * 0.37) % 6.2, z, 0.075, 0.075, W.snow)
     end
-    eng.render.draw_sprite(-21, 1.55, 0, 1.5, 1.8 + 0.15 * math.sin(t * 8), W.ember)
+    local fireTime = g.clock * f.prefs[1] / 100
+    local frame = math.floor(fireTime * 12) % #W.fireFrames
+    eng.render.draw_sprite(
+        -22.94,
+        0.54,
+        -0.19,
+        1.68,
+        1.33,
+        W.fireFrames[1 + (frame + 7) % 16],
+        0.80,
+        0.58,
+        0.35,
+        0,
+        true
+    )
+    eng.render.draw_sprite(-22.71, 0.56, 0.16, 1.49, 1.24, W.fireFrames[1 + frame], 0.91, 0.74, 0.46, 0, true)
+    if f.prefs[2] > 0 then
+        for _, h in ipairs(HallHalos) do
+            local c = lampColors[h[1]]
+            eng.render.draw_sprite(
+                h[2],
+                h[3] - h[5] * 0.5,
+                h[4],
+                h[5],
+                h[5],
+                W.glow,
+                c[1] * 0.60,
+                c[2] * 0.60,
+                c[3] * 0.60,
+                0,
+                true
+            )
+        end
+        if f.prefs[1] > 0 then
+            for i = 1, 4 do
+                local age = (fireTime * 0.58 + i * 0.27) % 1
+                local size = 0.075 * (1 - age)
+                eng.render.draw_sprite(
+                    -22.54,
+                    0.78 + age,
+                    (i - 2.5) * 0.30 + 0.08 * math.sin(6 * age + i),
+                    size,
+                    size,
+                    W.glow,
+                    1.6,
+                    0.40,
+                    0.05,
+                    0,
+                    true
+                )
+            end
+        end
+    end
     local today = g.room.hours
     if today > 0 then
         local x, z, ix, iz = Hall.door(today)

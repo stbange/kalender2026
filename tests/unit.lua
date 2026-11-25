@@ -25,6 +25,16 @@ x, z = H.move(0.2, 0.1, 0, 0, 0)
 assert(math.abs(x * x + z * z - 2.25 ^ 2) < 0.001)
 x, z = H.move(0, 0, 100, -100, 1)
 assert(x == 7.5 and z == -7.5)
+assert(H.move(-21.1, 0, -0.3, 0, 0) == -21.20)
+x, z = H.move(-22.7, 2.5, 0, -.3, 0)
+assert(x == -22.7 and z == 2.36)
+x, z = H.move(-22.7, -2.5, 0, .3, 0)
+assert(z == -2.36)
+for _, day in ipairs({3, 4}) do
+    local doorX, doorZ = H.door(day)
+    x, z = H.move(doorX, doorZ, 0, 0, 0)
+    assert(x == doorX and z == doorZ)
+end
 MissionPacks = {}
 dofile("tests/fixture/missions/day_01.lua")
 local enters, exits = 0, 0
@@ -167,6 +177,7 @@ end
 assert(not Service.rooms.room)
 -- Exercise the presentation and controls as a unit with the external engine boundary replaced.
 local events, positions, save, keys, pressed = {}, {}, {}, {}, {}
+local lightCalls, lastFire = {}, nil
 local function noop() end
 local function id()
     events[#events + 1] = 1
@@ -196,7 +207,13 @@ eng = {
             return y, p, 0, keys.up and -s * dt or 0
         end,
     },
-    render = { draw_sprite = noop, draw_text = noop, set_sky = noop, add_light = id },
+    render = { draw_sprite = noop, draw_text = noop, set_sky = noop, add_light = function(lamp)
+        lightCalls[#lightCalls+1] = lamp
+        return id()
+    end, set_light = function(handle, change)
+        assert(handle == World.fireLight)
+        lastFire = change.color
+    end },
     portal = { link = noop },
     input = {
         down = function(k)
@@ -232,11 +249,25 @@ game = {}
 HostUTC = first
 dofile(base .. "feedback.lua")
 dofile(base .. "visitors.lua")
+dofile(base .. "lamps.lua")
 dofile(base .. "world.lua")
 dofile(base .. "main.lua")
 MissionPacks[1].build = noop
 init()
 local g = game.state
+assert(#HallLights == 8 and HallLights[1].name == "hearth" and HallLights[2].name == "entrance candles")
+for i, lamp in ipairs(HallLights) do
+    assert(lightCalls[i] == lamp and lamp.type == "point" and lamp.range < 21)
+end
+local saved = g.feedback.prefs[1]
+g.feedback.prefs[1] = 0
+World.update(g, 0)
+assert(lastFire[1] == HallLights[1].color[1])
+g.feedback.prefs[1] = 100
+g.clock = 0.2
+World.update(g, 0)
+assert(lastFire[1] > HallLights[1].color[1])
+g.feedback.prefs[1] = saved
 keys.fire, keys.up = true, true
 for i = 1, 5 do
     pressed["tool" .. i] = true

@@ -86,8 +86,8 @@ int hall_run(int argc, char **argv)
     cfg.repo_root = engine;
     cfg.game_dir = game;
     cfg.headless = o.headless;
-    cfg.width = 1280;
-    cfg.height = 720;
+    cfg.width = 960;
+    cfg.height = 540;
     eng_runtime_t *rt = eng_runtime_create(&cfg);
     if (!rt || !hall_load(rt, &o)) {
         eng_runtime_destroy(rt);

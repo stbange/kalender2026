@@ -32,9 +32,13 @@ def package(build, out, web, fixture=None, server=False):
     for f in sorted(src.rglob("*")):
         rel = f.relative_to(src)
         if server and (
-            rel.parts[0] == "assets"
+            rel.parts[0] in ("assets", "shaders")
             or rel.as_posix() in (
-                "scripts/world.lua", "scripts/main.lua", "scripts/feedback.lua", "scripts/visitors.lua",
+                "scripts/world.lua",
+                "scripts/main.lua",
+                "scripts/feedback.lua",
+                "scripts/visitors.lua",
+                "scripts/lamps.lua",
             )
         ):
             continue

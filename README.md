@@ -6,7 +6,9 @@ A first-person Christmas hall for up to eight friends. Walk around the tree to f
 
 [Download the Windows, Linux and Web builds](https://github.com/stbange/kalender2026/releases) · [GitHub Pages deployment](https://github.com/stbange/kalender2026/actions/workflows/hall.yml) · [Art credits](CREDITS.md)
 
-![The snowball pistol at the red-carpet entrance, facing the Christmas tree and numbered portals](docs/hall.png)
+![The spruce and west hearth seen across the candlelit galleries](docs/hall.png)
+
+Candle chandeliers and strings of colored bulbs light the aisles. The log fire and entrance chandelier cast shadows across the rugs and flagstones. Look through the low corner windows for snow-covered ridges, firs and a starry sky. [Christmas hearth](docs/hearth.png) · [Winter window](docs/winter-window.png)
 
 ## Play
 
@@ -35,7 +37,7 @@ Open **Feedback** in the Web menu or press **F3** in the native game to change m
 
 ## Host a room on Linux
 
-Use the **0.3.0** room service and clients together. This release uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
+Use the **0.4.0** room service and clients together for matching hall geometry. The game uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
 
 1. Point a domain at the host. Allow inbound TCP on ports 80 and 443 for Caddy's HTTPS certificate and WebSocket traffic. Keep port 8787 private.
 2. Install [Caddy](https://caddyserver.com/docs/install), replace the example domain in [hosting/Caddyfile](hosting/Caddyfile) and use it as the Caddy configuration. Caddy terminates TLS and proxies WebSocket upgrades.
@@ -68,7 +70,7 @@ python3 tools/package.py --web --build build-web --out dist/web
 python3 -m http.server --directory dist/web 8000
 ```
 
-Open localhost port 8000. WebXR uses a secure context and the Quest Browser's **Enter VR** button. Every texture, mesh, script and sound stays outside the executable. Edit the loose files and restart, or reopen the page. Regenerate the original GLB, PNG and WAV assets with `python3 tools/make_art.py` using the Python standard library.
+Open localhost port 8000. WebXR uses a secure context and the Quest Browser's **Enter VR** button. Every texture, mesh, script and sound stays outside the executable. Edit the loose files and restart, or reopen the page. Regenerate the original GLB, PNG and WAV assets with `python3 tools/make_art.py` after installing Pillow. The generator also rebuilds the two shadow masks from the fixtures' positions. The flat Web view renders within 960 × 540 pixels in landscape or 540 × 960 in portrait. The HUD uses display resolution and WebXR uses the headset's eye buffers.
 
 ## Add a future mission
 

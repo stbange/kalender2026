@@ -99,6 +99,9 @@ def run(site, binary):
         observer, answer = hello(f"ws://127.0.0.1:{port}", "browsers")
         assert answer == "WELCOME 1"
         with contextlib.closing(observer):
+            # Fire while the path to the bell is clear. Visitors keep walking during browser startup.
+            observer.send("F 1 1 -.1592 .00796 -.98722")
+            snapshot(observer, lambda s: s["hits"] >= 1)
             open_game(page, base)
             assert page.locator("h1").inner_text().replace("\n", " ") == "The Lantern Hall"
             page.locator("#feedback").click()
@@ -151,8 +154,6 @@ def run(site, binary):
                 )
             finally:
                 page.mouse.up()
-            observer.send("F 1 1 -.1592 .00796 -.98722")
-            snapshot(observer, lambda s: s["hits"] >= 1)
             page.wait_for_function("Number(document.getElementById('bells').textContent)>0", timeout=20000)
             # Native and browser clients transport game state through the same WSS reverse proxy.
             native = subprocess.Popen(
