@@ -101,7 +101,6 @@ ctest --test-dir build-cov --output-on-failure
 python3 tests/browser_smoke.py --site dist/web --binary build-cov/lantern
 python3 tests/touch_fire.py --site dist/web
 python3 tests/day_one_web.py --site dist/web
-python3 tests/day_one_web.py --site dist/web
 ```
 
 The C coverage command uses a fresh instrumented build. Lua coverage requires Lua 5.1 and its compiler, and inventories every first-party gameplay script. The upstream tests and their independent coverage gate run under `engine/`. Main's workflow builds the Linux, Windows and Web archives, runs the headless playthrough, creates live WebSocket rooms, and exercises desktop, touch and stereo lifecycle in the browser before Pages deployment. Set the repository's **Settings → Pages → Source** to **GitHub Actions**. The operator chooses the public multiplayer hostname in-game.
