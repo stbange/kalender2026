@@ -17,13 +17,29 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v4
+      - name: Publish the release archives for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9.]+-hall$ ]]
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            git fetch --no-tags origin "refs/tags/tested-archives-$TAG"
+            test "$(git rev-parse FETCH_HEAD^)" = "$GITHUB_SHA"
+            mkdir packages
+            git archive FETCH_HEAD | tar -x -C packages
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "The Lantern Hall ${TAG#v}" \
+              --notes-file hosting/release-notes.md packages/lantern-{linux-x86_64,room-linux-x86_64,web}.tar.gz \
+              packages/lantern-windows-x86_64.zip
+          fi
       - name: Retrieve the tested archive from this commit
         env:
           GH_TOKEN: ${{ github.token }}
