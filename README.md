@@ -57,7 +57,7 @@ python3 tools/package.py --build build --out dist/native
 dist/native/lantern
 ```
 
-Use a C11 compiler, CMake 3.20+, Ninja, Git, Python 3 and SDL3 with OpenGL support. The engine fetches pinned BearSSL sources and uses an installed SDL3_net or fetches its pinned 3.2.0 release. The network tests use the OpenSSL command-line tool to create a temporary CA. On Linux use a desktop with Mesa or another working OpenGL driver. The Linux room needs no display. Windows builds use an MSYS2 UCRT64 shell with GCC, CMake, Ninja and SDL3. Secure connections use the operating system's roots by default.
+Use a C11 compiler, CMake 3.20+, Ninja, Git, Python 3 and SDL3 with OpenGL support. The engine fetches pinned BearSSL sources and uses an installed SDL3_net or fetches its pinned 3.2.0 release. The network tests use the OpenSSL command-line tool to create a temporary CA. On Linux use a desktop with Mesa or another working OpenGL driver. The Linux room needs no display. Windows builds use an MSYS2 UCRT64 shell with GCC, CMake, Ninja and the UCRT64 `sdl3` and `sdl3-net` packages. Secure connections use the operating system's roots by default.
 
 With Emscripten 4.0.15 active, build and serve the Web edition locally.
 
