@@ -675,13 +675,20 @@ def winter_horizon(Model):
             r = rng.uniform(*distances)
             x, z = math.cos(a) * r, math.sin(a) * r
             h = rng.uniform(*heights) + 2.0 * math.sin(5 * a)
-            # Distinct stepped whorls read as firs even when their silhouettes occupy a few pixels.
-            forest.cone(x, 0, z, h * 0.032, h * 0.023, h * 0.28, 18, 5)
+
+            # Trees face the hall at their actual distances; four tiers give each fir its stepped silhouette.
+            def tip(offset, height):
+                return x + math.sin(a) * h * offset, h * height, z - math.cos(a) * h * offset
+
+            def silhouette(points):
+                forest.face([tip(offset, height) for offset, height in reversed(points)], 18)
+
+            silhouette([(-0.027, 0), (0.027, 0), (0.027, 0.30), (-0.027, 0.30)])
             for low, high, width in (
                 (0.12, 0.61, 0.21),
                 (0.31, 0.76, 0.18),
                 (0.50, 0.88, 0.137),
                 (0.67, 1, 0.098),
             ):
-                forest.cone(x, h * low, z, h * width, 0, h * (high - low), 18, 6)
+                silhouette([(-width, low), (width, low), (0, high)])
     return (("winter-ridges", ridges), ("winter-snow", snow), ("winter-pines", pines))

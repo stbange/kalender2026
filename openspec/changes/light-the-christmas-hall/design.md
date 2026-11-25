@@ -16,4 +16,4 @@ Build the tree from several whorls of uneven branches with textured needle spray
 
 ## Presentation and validation
 
-Keep the HUD at display resolution and WebXR on the headset's native eye buffers. Test the actual WebGL scene at the entry, beside the hearth and at the gallery doors. Check animation, reduced motion and loose asset packaging through the existing test pipeline.
+Keep the HUD at display resolution and WebXR on the headset's native eye buffers. Test the actual WebGL scene at the entry, beside the hearth and at the gallery doors. Check animation, reduced motion and loose asset packaging through the existing test pipeline. The Web shell passes relative mouse movement while the canvas owns pointer lock. Slow frames advance gameplay by at most 100 ms so the lower-resolution client can still walk, fire and retry a doorway on a software renderer.

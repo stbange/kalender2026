@@ -132,7 +132,7 @@ function W.build()
         ["winter-snow"] = { 0.087, 0.151, 0.224 },
         ["winter-pines"] = { 0.005, 0.013, 0.022 },
     }) do
-        object(name, mesh(name), 0, 0, 0, 0, { emissive = glow, roughness = 1, cast_shadow = false })
+        object(name, mesh(name), 0, 0, 0, 0, { emissive = glow, roughness = -1, cast_shadow = false })
     end
     object(
         "Glass baubles",

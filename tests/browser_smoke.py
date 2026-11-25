@@ -259,6 +259,7 @@ def run(site, binary):
             assert page.locator("[name=room]").input_value() == "browsers"
             page.locator("#roomForm .primary").click()
             expect_text(page, "#connection", "2/8")
+        desktop.close()
         # Arrange a real snowman in the pistol's path. Its health, movement, hits and clears use shipping Lua.
         practice = browser.new_context(viewport={"width": 960, "height": 540}, reduced_motion="reduce")
         solo = practice.new_page()
@@ -272,6 +273,8 @@ function init()
     local g=game.state
     g.room.mobs[1].x,g.room.mobs[1].z=g.x,g.z-2.8
 end
+local hud=host_hud
+function host_hud() return hud().."|"..string.format("%.2f",game.state.yaw) end
 """
         )
         solo.route(
@@ -297,6 +300,10 @@ end
         finally:
             solo.mouse.up()
         assert solo.locator("#visitors").inner_text() == "4"
+        # Menu pointer coordinates must leave the first shot on target. Locked relative motion still turns.
+        assert float(solo.evaluate("hudText.split('|').at(-1)")) == 0
+        solo.evaluate("canvas.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,movementX:18}))")
+        solo.wait_for_function("Math.abs(Number(hudText.split('|').at(-1))) > 1")
         practice.close()
         assert not errors, errors
         assert not failed, failed

@@ -202,6 +202,10 @@ function keyInput(e) {
 }
 window.addEventListener("keydown", keyInput, true);
 window.addEventListener("keyup", keyInput, true);
+document.addEventListener("mousemove", (e) => {
+  if (ready && !touch && document.pointerLockElement === canvas)
+    call("look", ["number", "number"], [e.movementX, e.movementY]);
+});
 canvas.addEventListener("pointerdown", (e) => {
   if (!touch && document.body.dataset.mode === "play" && e.button === 0) action("fire", true);
 });

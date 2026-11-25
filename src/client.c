@@ -260,9 +260,21 @@ static void frame(void)
     eng_platform_t *plat = eng_runtime_platform(app.rt);
     eng_input_t *input = eng_runtime_input(app.rt);
     float dt = eng_platform_begin_frame(plat);
+#ifdef __EMSCRIPTEN__
+    /* A slow GPU frame may take over 100 ms. Keep gameplay moving at a bounded step. */
+    static double previous_ms;
+    double now_ms = emscripten_get_now();
+    if (previous_ms > 0)
+        dt = (float)fmin(0.1, (now_ms - previous_ms) * 0.001);
+    previous_ms = now_ms;
+#endif
     eng_input_begin_frame(input, dt);
     eng_input_poll_sdl(input, plat);
-#ifndef __EMSCRIPTEN__
+#ifdef __EMSCRIPTEN__
+    /* The Web shell supplies locked mouse and touch deltas. SDL also synthesizes motion from menu clicks. */
+    eng_vec2_t browser_mouse = eng_input_mouse_delta(input);
+    eng_input_inject_mouse_delta(input, -browser_mouse.x, -browser_mouse.y);
+#else
     if (app.settings.submit) {
         app.settings.submit = false;
         if (hall_connect(app.settings.endpoint, app.settings.room)) {

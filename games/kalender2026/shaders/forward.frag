@@ -47,9 +47,8 @@ void main() {
     vec2 blocked = vec2(0.0);
     if (floor_receiver) {
         if (any(lessThan(v_uv, vec2(0.0))) || any(greaterThan(v_uv, vec2(1.0)))) discard;
-        ivec2 size = textureSize(u_albedo_tex, 0);
-        ivec2 pixel = clamp(ivec2(v_uv * vec2(size)), ivec2(0), size - 1);
-        float masks = floor(texelFetch(u_albedo_tex, pixel, 0).a * 255.0 + 0.5);
+        // The receiver and silhouette both use this nearest-filtered, untinted floor texture.
+        float masks = floor(tex.a * 255.0 + 0.5);
         blocked = vec2(mod(masks, 16.0), floor(masks / 16.0)) / 15.0;
         tex.a = 1.0;
     }
@@ -57,6 +56,11 @@ void main() {
     if (tex.a < alpha_cut) discard;
 
     float fog_f = eng_fog_factor(u_cam_pos, v_world_pos, u_fog.w, u_fog_height);
+    if (u_mat_mr.y < 0.0) {
+        // The moonlit outdoor meshes sit beyond the hall fixtures' range.
+        o_color = vec4(mix(u_emissive, u_fog.rgb, fog_f), 1.0);
+        return;
+    }
     if (u_mat_mr.z < -0.5) {
         /* Self-emissive / additive particle (fire, sparks, magic glow) */
         vec3 fx_col = tex.rgb * (1.0 + u_emissive.r) * (1.0 - fog_f);
@@ -88,6 +92,7 @@ void main() {
             vec3 to_l = u_light_pos_type[i].xyz - v_world_pos;
             float dist = length(to_l);
             float range = max(u_light_dir_range[i].w, 0.1);
+            if (dist >= range) continue;
             L = to_l / max(dist, 0.0001);
             float fall = clamp(1.0 - (dist / range), 0.0, 1.0);
             atten = fall * fall;
@@ -114,6 +119,7 @@ void main() {
                 atten *= smoothstep(u_light_color_cone[i].w, u_light_color_cone[i].w + 0.1, cos_ang);
             }
         }
+        if (dot(N, L) <= 0.0) continue;
         Lo += eng_pbr_eval(N, V, L, albedo, metallic, roughness, u_light_color_cone[i].rgb * atten);
     }
 
