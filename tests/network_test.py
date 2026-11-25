@@ -457,8 +457,10 @@ def last_launch(binary, root):
         assert state["mission_players"][2] == 1
         spectator = clients[7]
         spectator.send("F 1 1 -.1592 .00796 -.98722")
-        snapshot(spectator, lambda s: s["hits"] == 1)
-        walk([spectator], (0, 17), (-23, 17.5))
+        shot = snapshot(spectator, lambda s: any(e["owner"] == 8 and e["code"] == 1 for e in s["events"]))
+        assert shot["players"][8]["space"] == 0
+        watch = shot["players"][8]
+        walk([spectator], (watch["x"], watch["z"]), (-23, 17.5))
         spectator.send("ENTER 1")
         all_in = snapshot(spectator, lambda s: len(s["mission_players"]) == 8)
         assert all_in["players"][8]["progress"] == 2
