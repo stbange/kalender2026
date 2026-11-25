@@ -3,15 +3,27 @@ find_package(Git REQUIRED)
 find_package(OpenSSL 1.1.1 REQUIRED)
 set(engine_root "${CMAKE_CURRENT_SOURCE_DIR}/engine")
 set(net_overlay "${CMAKE_CURRENT_BINARY_DIR}/native-engine")
-set(net_patch "${CMAKE_CURRENT_SOURCE_DIR}/cmake/engine-native-network.patch")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${net_patch}")
+set(net_patch "${net_overlay}/engine-native-network.patch")
+
+# A Windows checkout can contain CRLF in both the diff and its context lines.
+function(copy_network_text source destination)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${source}")
+    file(READ "${source}" content)
+    string(REPLACE "\r\n" "\n" content "${content}")
+    file(WRITE "${destination}" "${content}")
+endfunction()
 
 file(GLOB engine_headers CONFIGURE_DEPENDS "${engine_root}/include/engine/*.h")
 foreach(header IN LISTS engine_headers)
     get_filename_component(name "${header}" NAME)
-    configure_file("${header}" "${net_overlay}/include/engine/${name}" COPYONLY)
+    if(name STREQUAL "eng_net.h")
+        copy_network_text("${header}" "${net_overlay}/include/engine/${name}")
+    else()
+        configure_file("${header}" "${net_overlay}/include/engine/${name}" COPYONLY)
+    endif()
 endforeach()
-configure_file("${engine_root}/src/eng_net.c" "${net_overlay}/src/eng_net.c" COPYONLY)
+copy_network_text("${engine_root}/src/eng_net.c" "${net_overlay}/src/eng_net.c")
+copy_network_text("${CMAKE_CURRENT_SOURCE_DIR}/cmake/engine-native-network.patch" "${net_patch}")
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env "GIT_CEILING_DIRECTORIES=${CMAKE_CURRENT_BINARY_DIR}"
             "${GIT_EXECUTABLE}" apply --no-index --whitespace=nowarn "${net_patch}"
