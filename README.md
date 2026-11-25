@@ -1,5 +1,7 @@
 # Kalender 2026 · The Lantern Hall
 
+**[Play The Lantern Hall on GitHub Pages](https://stbange.github.io/kalender2026/)**
+
 A first-person Christmas hall for up to eight friends. Walk around the tree to find 24 numbered doors, try five snowcasters at the brass-bell range, or chase down the five visitors wandering the galleries. Cold contact slows your walk briefly. Clearing the hall lets you ring the practice bell for another wave.
 
 [Download the Windows, Linux and Web builds](https://github.com/stbange/kalender2026/releases) · [GitHub Pages deployment](https://github.com/stbange/kalender2026/actions/workflows/hall.yml) · [Art credits](CREDITS.md)
@@ -8,7 +10,7 @@ A first-person Christmas hall for up to eight friends. Walk around the tree to f
 
 ## Play
 
-Unpack the whole native archive and run `lantern.exe` or `./lantern`. The Web edition runs in a WebGL2 browser. To play the Web archive locally, extract it, run `python3 -m http.server 8000` in its folder and open `http://localhost:8000/`. The public project address is `https://stbange.github.io/kalender2026/` once the Pages deployment succeeds. Solo practice starts immediately. To meet friends, open **Join friends** in the Web menu or press **F2** in the native game, enter the same WebSocket service and room code, and connect. The Web form can copy a shareable invitation. Addresses and room codes are remembered on each device. A full room accepts a new player when someone leaves.
+Unpack the whole native archive and run `lantern.exe` or `./lantern`. The Web edition runs in a WebGL2 browser. To play the Web archive locally, extract it, run `python3 -m http.server 8000` in its folder and open `http://localhost:8000/`. Solo practice starts immediately. To meet friends, open **Join friends** in the Web menu or press **F2** in the native game, enter the same WebSocket service and room code, and connect. The Web form can copy a shareable invitation. Addresses and room codes are remembered on each device. A full room accepts a new player when someone leaves.
 
 | Action | Desktop | Touch | Quest 3 |
 | --- | --- | --- | --- |

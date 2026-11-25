@@ -42,7 +42,8 @@ The first playable milestone is an eight-player hall, its 24 portals and the sha
 - [x] 6.2 Build the game-specific Web shell with Emscripten/WebGL2. Fetch the hall first and each mission on demand. Smoke-test a project-path deployment in a clean browser with touch and desktop input, checked network requests, external Lua/assets, and persistent saves.
 - [x] 6.3 Run strict OpenSpec validation, native CTest, separate game C and Lua unit coverage reports, the engine spatial doctor and deterministic headless playtests. Run the live-network tests separately from loopback tests and retain the reports and failure captures.
 - [ ] 6.4 Rehearse the day-24 hall with eight players and the range active. Capture frame timing on a reference desktop, an identified Android handset, an iPhone and Quest 3. Check the design's 60/30/72 targets, portal readability, touch response and VR comfort.
-- [ ] 6.5 Configure Pages for GitHub Actions. From a successful build of `main`, upload the tested Pages artifact, deploy it with the matching Linux service/content revision and join from two devices outside the host network. Verify the project URL, one bell hit, reconnect and the documented rollback to a previous matched revision.
+- [x] 6.5 Publish the tested Web artifact from `main` through GitHub Actions Pages. Verify that the project URL serves the matching release and opens the hall.
+- [ ] 6.6 Deploy the matching Linux service on the public host. Join from two devices outside its network, score a bell hit, reconnect and rehearse the documented rollback to a previous matched revision.
 
 ## 7. Playtest the shooter in the hall
 
@@ -56,11 +57,13 @@ The Windows and Linux headless tests use a real room process. The eight-client s
 
 The visual check captures arrival, door 24 and the range. A local 960 × 540 Chromium software-rendering run with eight simulated players and an active range measured 133.4 ms median frame time over 32 frames. Reports record the renderer and timing for each run.
 
-All 24 modeled numerals were captured from their matching thresholds and inspected in grayscale. The WebKit iPhone 13 browser profile launched the Web build, activated touch controls and selected the Flurry Fan. The release jobs measured 97.2% first-party C unit line coverage (522/537) and 97.96% Lua unit line coverage (913/932). Windows, Linux/Web and release jobs passed. Four matched archives are available in [v0.1.0-hall](https://github.com/stbange/kalender2026/releases/tag/v0.1.0-hall). The Pages job received HTTP 403 when GitHub Actions tried to enable Pages. A repository owner can select GitHub Actions in Pages settings and rerun that failed job. [Grayscale numerals](../../../docs/portal-labels.png) · [Release checks](https://github.com/stbange/kalender2026/actions/runs/45514408417)
+All 24 modeled numerals were captured from their matching thresholds and inspected in grayscale. The WebKit iPhone 13 browser profile launched the Web build, activated touch controls and selected the Flurry Fan. The release jobs measured 97.2% first-party C unit line coverage (522/537) and 97.96% Lua unit line coverage (913/932). Windows, Linux/Web and release jobs passed. Four matched archives are available. [Grayscale numerals](../../../docs/portal-labels.png) · [Release v0.1.0-hall](https://github.com/stbange/kalender2026/releases/tag/v0.1.0-hall)
+
+The Pages deployment passed on November 25, 2026. The 66 checked files served over HTTPS matched the Web release byte for byte, including the Wasm module, Lua scripts and hall assets. In the published hall, the desktop playthrough scored a bell hit with the pistol and selected all five snowcasters. The WebKit iPhone 13 profile entered the hall and selected the Bankshot with touch controls. [Play The Lantern Hall](https://stbange.github.io/kalender2026/) · [Release and deployment checks](https://github.com/stbange/kalender2026/actions/runs/45514408417)
 
 Physical Quest 3, iPhone and Android frame-rate, readability and comfort checks still require those devices. Public multiplayer checks require the operator's Linux service to be online. The room address is editable in-game. The OpenSpec change stays open through public and physical-device acceptance.
 
 ## Workflow follow-up after release
 
-- Archive the hall change when the acceptance scenarios pass and the public multiplayer smoke test succeeds. The intended Pages address is `https://stbange.github.io/kalender2026/`.
+- Archive the hall change when the acceptance scenarios pass and the public multiplayer smoke test succeeds.
 - Open the first real mission change from a chosen childhood-game pitch. Set its date, build one complete co-op objective, test late joins and returns, credit its assets and deliver its pack before its Warsaw opening time. Repeat for each subsequent day.
