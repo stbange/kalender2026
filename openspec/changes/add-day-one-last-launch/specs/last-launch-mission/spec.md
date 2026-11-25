@@ -22,12 +22,12 @@ Door 1 SHALL take eligible players to the snowy Los Angeles cinema. The route SH
 
 ### Requirement: Five distinct arcade weapons
 
-Players SHALL have access along the route to a player-triggered remote snow cracker, a freezer, a single-shot Snow Rocket, a shrink ray and rapid twin launchers. Any tool needed to open the next passage SHALL be available again after a missed attempt.
+Players SHALL have access along the route to a direct-fire Snow Pistol, a freezer, a single-shot Snow Rocket, a shrink ray and rapid twin launchers. Any tool needed to open the next passage SHALL be available again after a missed attempt.
 
-#### Scenario: Choose the moment to pop the cracker
+#### Scenario: Fire on the first press
 
-- **WHEN** two friends throw their crackers and one activates their remote
-- **THEN** only that friend's cracker pops. Holding the throw through placement or dragging the touch view once cannot trigger a second action.
+- **WHEN** a player aims the pistol at a vulnerable enemy and presses Fire
+- **THEN** the room resolves one direct hit immediately. Holding Fire repeats at the pistol cadence. A single drag on the touch look area continues to aim.
 
 #### Scenario: Change the outcome of a fight
 
@@ -59,7 +59,7 @@ The lunar stadium SHALL contain one shared alien Queen encounter. Completing it 
 
 #### Scenario: Bring down the scenery
 
-- **WHEN** the crew exposes the lunar stage rig and times a remote cracker under the Queen's cardboard Moon
+- **WHEN** the crew exposes the lunar stage rig and shoots the striped target on the moving sideline cart
 - **THEN** the Moon drops, the Queen is boxed for return, the crew recovers the ornament and the stadium tunnel opens to Door 1.
 
 #### Scenario: Two players finish together

@@ -1,6 +1,8 @@
-The Lantern Hall 0.5.0 opens every installed mission immediately during playtesting. Walk into Door 1 to play **Last Launch from Tinseltown** from the cinema roof to the Moon Bowl. The hall shows how many doors are playable.
+The Lantern Hall 0.5.1 gives Day 1 a Snow Pistol from the rooftop onward. Tap Fire for one shot or hold it for a steady stream. Aim directly at the cinema latch and the striped target on the sideline cart.
 
-For co-op, use the matching Linux room service from this release. Its catalog revision is `last-launch-open-1`. Personal ornaments retain their existing save format.
+Watch the ushers step, the skaters lean and the couriers hover. Shots make enemies recoil, frozen foes can shatter, and armored targets answer with a metallic knock. Nearby friends see the same impact.
+
+Install the matching Linux room service for co-op. Its catalog revision is `tinseltown-pistol-1`. Saved ornaments carry forward.
 
 [Play on GitHub Pages](https://stbange.github.io/kalender2026/)
 

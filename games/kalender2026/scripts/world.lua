@@ -440,13 +440,6 @@ function W.update(g, dt)
     end
 end
 function W.sprites(g)
-    if g.space ~= 0 then
-        local pack = MissionPacks[g.space]
-        if pack and pack.sprites then
-            pack.sprites(g)
-        end
-        return
-    end
     local f = g.feedback
     local function sprite(kind, x, y, z, size)
         eng.render.draw_sprite(x, y, z, size, size, W.fxTextures[kind])
@@ -474,6 +467,30 @@ function W.sprites(g)
             end
         end
     end
+    local contrast = f.prefs[7] == 1 and "-contrast" or ""
+    if g.xr then
+        if f.prefs[5] == 1 and g.clock < f.markUntil then
+            sprite(f.mark .. contrast, f.mx, f.my + 0.09, f.mz, 0.24)
+        end
+        local hand = g.xr
+        if (f.slow and F.on("VIS-02")) or g.clock < f.recovery then
+            sprite("boot" .. contrast, g.x + hand.ox, 1.70 + hand.oy, g.z + hand.oz, 0.10)
+        end
+        if f.prefs[6] == 1 then
+            for i, c in ipairs(f.captions) do
+                sprite(c.icon, c.x, c.y + 0.10 * i, c.z, 0.24)
+                sprite(c.icon, g.x + hand.ox + 0.07 * i, 1.82 + hand.oy, g.z + hand.oz, 0.06)
+            end
+        end
+    end
+    if g.space ~= 0 then
+        local pack = MissionPacks[g.space]
+        if pack and pack.sprites then
+            pack.sprites(g)
+        end
+        f.drawn = used
+        return
+    end
     for _, v in pairs(f.trails) do
         if v.dx and g.clock - v.at < 0.1 then
             for k = 1, math.min(3, limit - used) do
@@ -500,22 +517,6 @@ function W.sprites(g)
         used = used + 1
     end
     f.drawn = used
-    local contrast = f.prefs[7] == 1 and "-contrast" or ""
-    if g.xr then
-        if f.prefs[5] == 1 and g.clock < f.markUntil then
-            sprite(f.mark .. contrast, f.mx, f.my + 0.09, f.mz, 0.24)
-        end
-        local hand = g.xr
-        if (f.slow and F.on("VIS-02")) or g.clock < f.recovery then
-            sprite("boot" .. contrast, g.x + hand.ox, 1.70 + hand.oy, g.z + hand.oz, 0.10)
-        end
-        if f.prefs[6] == 1 then
-            for i, c in ipairs(f.captions) do
-                sprite(c.icon, c.x, c.y + 0.10 * i, c.z, 0.24)
-                sprite(c.icon, g.x + hand.ox + 0.07 * i, 1.82 + hand.oy, g.z + hand.oz, 0.06)
-            end
-        end
-    end
     local t = g.room.time
     for n = 1, 34 do
         local x = ((n * 17) % 41) - 20 + math.sin(t + n) * 0.15

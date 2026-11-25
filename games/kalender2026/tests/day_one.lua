@@ -94,7 +94,7 @@ function playtest_frame(f)
         if (a.kind <= 2 or a.kind == 7) and a.hp > 0 and (a.x - g.x) ^ 2 + (a.z - g.z) ^ 2 < 45 then
             local available = m.unlocked(run)
             local tool = available >= 5 and 5 or available >= 3 and 3 or 1
-            shot(tool, a.x, a.z, tool ~= 1)
+            shot(tool, a.x, a.z, true)
             return
         end
     end
@@ -102,9 +102,7 @@ function playtest_frame(f)
         local cx, cz = m.cart(run)
         local ax, az = path(g.x, g.z, 0, cz + 5)
         if walk(g, ax, az, 0.8) and math.abs(g.z - cz) < 7 then
-            if not p.cracker or math.abs(cx) < 1.4 then
-                shot(1, cx, cz, false)
-            end
+            shot(1, k == 3 and 0 or cx, cz, true)
         end
         return
     end

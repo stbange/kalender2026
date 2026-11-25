@@ -21,12 +21,24 @@ end
 function update(dt)
     HostUTC=1796079599
     step(dt)
+    local g=game.state
+    if g.space==1 and not g.range then
+        local p=g.room.players[g.id]
+        local r=g.room.instances[1]
+        p.x,p.z=-8,-9
+        MissionPacks[1].act(r,p)
+        g.x,g.z,g.yaw,g.pitch=0,-15,0,0
+        p.x,p.z,p.yaw=g.x,g.z,0
+        local a=r.actors[1]
+        a.kind,a.x,a.z=1,0,-20
+        g.range=a
+    end
 end
 
 function host_hud()
     local g=game.state
     local p=g.room.players[g.id]
-    return hud().."|"..g.seq..","..tostring(p.cracker~=nil)..","..g.space..","..g.yaw
+    return hud().."|"..g.seq..","..tostring(g.range and g.range.hp or -1)..","..g.space..","..g.yaw
 end
 """
 
@@ -52,11 +64,7 @@ def stereo(browser, url):
     page.evaluate("menu(true)")
     page.locator("#vr").click()
     page.wait_for_function("stereoFrames > 3 && testSession.active")
-    page.wait_for_function(state + "[1]==='true'")
-    page.evaluate("testSession.inputSources[0].gamepad.buttons[0].value=0")
-    page.wait_for_timeout(450)
-    page.evaluate("testSession.inputSources[0].gamepad.buttons[0].value=1")
-    page.wait_for_function(state + "[1]==='false'")
+    page.wait_for_function("Number("+state+"[0])>=2")
     page.locator("#vr").click()
     context.close()
 
@@ -78,12 +86,12 @@ def check(browser, url, options, capture):
     state = "hudText.split('|').at(-1).split(',')"
     page.wait_for_function(state + "[2]==='1'", timeout=60000)
     assert page.locator("#days").text_content() == "1"
-    assert page.locator("#hint").text_content().startswith("Rooftop")
+    assert page.locator("#hint").text_content().startswith("Midnight cinema")
     assert len(art) >= 20 and all(s == 200 for s in art)
     x, y = page.viewport_size["width"] * 0.82, page.viewport_size["height"] * 0.53
     page.touchscreen.tap(x, y)
     page.wait_for_timeout(650)
-    assert page.evaluate(state)[0:2] == ["0", "false"]
+    assert page.evaluate(state)[0:2] == ["0", "2"]
     assert page.evaluate("([x,y])=>document.elementFromPoint(x,y)===canvas", [x, y])
     if browser.browser_type.name == "chromium":
         cdp = context.new_cdp_session(page)
@@ -99,11 +107,11 @@ def check(browser, url, options, capture):
     else:
         page.touchscreen.tap(x, y)
         page.touchscreen.tap(x + 1, y + 1)
-    page.wait_for_function(state + "[1]==='true'")
+    page.wait_for_function(state + "[1]==='1'")
     page.wait_for_timeout(600)
     assert page.evaluate(state)[0] == "1"
     page.locator("#fire").tap()
-    page.wait_for_function(state + "[1]==='false'")
+    page.wait_for_function(state + "[1]==='0'")
     assert page.evaluate(state)[0] == "2"
     if capture:
         page.screenshot(path=str(capture))
@@ -139,5 +147,5 @@ if __name__ == "__main__":
         with pw.webkit.launch() as browser:
             check(browser, url, pw.devices["iPhone 13"], None)
     print(
-        "Day 1 pack, real WebGL entry, touch aiming and two independent cracker presses passed in Chromium, iPhone WebKit and emulated WebXR."
+        "Day 1 pack, real WebGL entry, touch aiming and immediate pistol hits and held-trigger fire passed in Chromium, iPhone WebKit and emulated WebXR."
     )

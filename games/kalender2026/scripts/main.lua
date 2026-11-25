@@ -295,10 +295,9 @@ function update(dt)
                 end
             end
             local held = eng.input.down("fire")
-            if held and (g.weapon ~= 1 or not g.triggerHeld) and g.clock >= g.nextFire then
+            if held and g.clock >= g.nextFire then
                 fire(g)
             end
-            g.triggerHeld = held
             if not held then
                 Feedback.endBurst(g)
             end
@@ -308,9 +307,6 @@ function update(dt)
     end
     if not g.online and g.space ~= p.space then
         g.x, g.z, g.yaw, g.space, g.doorGuard = p.x, p.z, p.yaw, p.space, g.clock + 0.65
-    end
-    if g.space == 0 then
-        g.triggerHeld = nil
     end
     apply_award(g, p)
     Feedback.tick(g)

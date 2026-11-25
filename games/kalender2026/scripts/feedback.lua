@@ -35,7 +35,6 @@ Feedback = {
         "throw",
         "bell",
         "poof",
-        "d1-remote",
         "d1-freeze",
         "d1-shrink",
         "d1-twins",
@@ -468,6 +467,7 @@ function F.baseline(g, quiet)
     f.hitSeq, f.markSeq, f.rearIcon = nil, nil, nil
     f.hintUntil = 0
     f.sounds, f.captions, f.trails, f.visitors, f.flinch, f.lastKnock = {}, {}, {}, {}, {}, {}
+    f.dayJoined = nil
     f.quietWake = quiet
     for _, e in ipairs(f.effects) do
         e.life = 0

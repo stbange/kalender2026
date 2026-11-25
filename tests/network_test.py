@@ -2,6 +2,7 @@
 
 import argparse
 import contextlib
+import math
 import os
 from pathlib import Path
 import signal
@@ -179,7 +180,7 @@ class HallConnection(ClientConnection):
         return message
 
 
-def hello(url, room="friends", revision="last-launch-open-1", **kwargs):
+def hello(url, room="friends", revision="tinseltown-pistol-1", **kwargs):
     ws = connect(
         url,
         proxy=None,
@@ -217,6 +218,7 @@ def snapshot(ws, predicate, timeout=8):
             latest=0,
             loads=[],
             mission_players={},
+            actors=[],
         )
         for row in lines[1:]:
             if row[0] == "I":
@@ -251,6 +253,18 @@ def snapshot(ws, predicate, timeout=8):
                     progress=int(progress),
                     done=int(done),
                 )
+            elif row[:3] == ["D", "1", "1"]:
+                state["actors"].append(
+                    dict(
+                        x=float(row[4]),
+                        z=float(row[5]),
+                        hp=int(row[6]),
+                        id=int(row[10]),
+                        shooter=int(row[14]),
+                        seq=int(row[15]),
+                        result=int(row[18]),
+                    )
+                )
             elif row[:3] == ["D", "1", "3"]:
                 state["loads"].append(row[3:])
             elif row[:3] == ["D", "1", "2"]:
@@ -280,7 +294,7 @@ def public_room(binary, root):
         url = f"ws://127.0.0.1:{port}"
         clients = []
 
-        def join(room="friends", revision="last-launch-open-1"):
+        def join(room="friends", revision="tinseltown-pistol-1"):
             ws, answer = hello(url, room, revision)
             stack.callback(ws.close)
             return ws, answer
@@ -312,7 +326,7 @@ def public_room(binary, root):
         joined = snapshot(new, lambda s: s["hits"] == 1)
         assert joined["wave"] == 1 and joined["latest"] == bell["id"]
         assert joined["seats"][8] != s["seats"][8]
-        new.send("HELLO3 last-launch-open-1 friends")
+        new.send("HELLO3 tinseltown-pistol-1 friends")
         assert len(snapshot(new, lambda s: True)["players"]) == 8
         with tempfile.TemporaryDirectory() as tmp, tls_proxy(port, tmp) as (secure, cert, names):
             witness, answer = join("native")
@@ -441,19 +455,29 @@ def last_launch(binary, root):
         walk(clients[:7], (0, 17), (-23, 17.5))
         for ws in clients[:7]:
             ws.send("ENTER 1")
-        snapshot(clients[7], lambda s: sum(p["space"] == 1 for p in s["players"].values()) == 7)
+        rooftop = snapshot(clients[7], lambda s: sum(p["space"] == 1 for p in s["players"].values()) == 7)
+        shooter = rooftop["players"][1]
+        usher = rooftop["actors"][0]
+        dx, dz = usher["x"] - shooter["x"], usher["z"] - shooter["z"]
+        dy = 1.18 + min(3.25, max(0, (usher["z"] + 9) * 0.2955)) - 4.8
+        length = math.sqrt(dx * dx + dy * dy + dz * dz)
+        clients[0].send(f"F 1 1 {dx / length:.5f} {dy / length:.5f} {dz / length:.5f}")
+        for peer in clients[:2]:
+            snap = snapshot(peer, lambda s: any(a["shooter"] == 1 and a["seq"] == 1 for a in s["actors"]))
+            hit = next(a for a in snap["actors"] if a["shooter"] == 1 and a["seq"] == 1)
+            assert hit["result"] == 1 and hit["hp"] == 1
         walk(clients[:2], (0, 5), (-8, -9))
         for ws in clients[:2]:
             ws.send("USE")
         for ws in clients[:2]:
             s = snapshot(ws, lambda s: s["players"][1]["progress"] == 2 and bool(s["loads"]))
             assert len(s["mission_players"]) == 7 and s["players"][8]["space"] == 0
-        for ws in clients[:2]:
-            ws.send("F 1 1 0 0 -1")
-        snapshot(clients[7], lambda s: sum(s["mission_players"].values()) == 2)
-        time.sleep(0.3)
         clients[0].send("F 2 1 0 0 -1")
-        state = snapshot(clients[1], lambda s: s["mission_players"].get(1) == 0)
+        clients[1].send("F 1 1 0 0 -1")
+        snapshot(clients[7], lambda s: s["mission_players"].get(1) == 2 and s["mission_players"].get(2) == 1)
+        time.sleep(0.3)
+        clients[0].send("F 3 1 0 0 -1")
+        state = snapshot(clients[1], lambda s: s["mission_players"].get(1) == 3)
         assert state["mission_players"][2] == 1
         spectator = clients[7]
         spectator.send("F 1 1 -.1592 .00796 -.98722")
@@ -464,7 +488,7 @@ def last_launch(binary, root):
         spectator.send("ENTER 1")
         all_in = snapshot(spectator, lambda s: len(s["mission_players"]) == 8)
         assert all_in["days"] == 0 and all_in["players"][8]["progress"] == 2
-    print("Eight real engine WebSocket clients shared the production mission and independent remotes.")
+    print("Eight real engine WebSocket clients shared the production mission and independent pistol shots.")
 
 
 if __name__ == "__main__":

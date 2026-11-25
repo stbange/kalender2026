@@ -2,15 +2,15 @@
 local M = {
     title = "Last Launch from Tinseltown",
     ornament = "brass-rocket",
-    tools = { "Snow Cracker", "Freezer", "Snow Rocket", "Shrink Ray", "Twin Tinsel Launchers" },
-    delays = { 0.19, 0.28, 0.72, 0.32, 0.12 },
+    tools = { "Snow Pistol", "Freezer", "Snow Rocket", "Shrink Ray", "Twin Tinsel Launchers" },
+    delays = { 0.20, 0.28, 0.72, 0.32, 0.12 },
 }
 MissionPacks[1] = M
 -- The brass beacon marks the current destination and doubles as a landmark in VR.
 local stops = {
     { "Rooftop", "Walk to the striped air vent. Use to drop inside.", -8, -9 },
     { "Midnight cinema", "Use the projector. Where is the courier taking that sack?", 9, -21 },
-    { "Moon Bowl matinee", "Fire 1 at the cart. Press again beneath the gold latch.", 0, -34 },
+    { "Moon Bowl matinee", "Shoot the striped latch to drop the plywood Moon.", 0, -34 },
     { "Dead-letter diner", "Freeze the skating boar with 2. Use its statue to slide it.", -5, -55 },
     { "Service bell", "Follow the sliding statue to the till. Collect the red ticket.", 9, -66 },
     { "Dead-letter office", "Find the red reader and stamp the dispatch ticket.", -10, -80 },
@@ -26,7 +26,7 @@ local stops = {
     { "Incubator", "Inspect the brass mold behind the hatching mail sacks.", -8, -234 },
     { "Players' tunnel", "Open the locker for twin launchers. Take the midfield lift.", 2, -250 },
     { "Moon Bowl", "Clear the eggs with 5. Bait the Queen to the gold goalpost.", 0, -278 },
-    { "Sideline cart", "Fire 1 at the cart. Click again beneath the gold latch!", 0, -288 },
+    { "Sideline cart", "Shoot the red target on the sideline cart to crate the Queen!", 0, -288 },
     { "Return to sender", "Collect the brass rocket at midfield.", 0, -296 },
 }
 M.stops = stops
@@ -186,12 +186,12 @@ local function checkpoint(run)
     return 5
 end
 function M.enter(run, p)
-    p.x, p.z, p.tiny, p.cracker, p.vital = 0, checkpoint(run), false, nil, 5
+    p.x, p.z, p.tiny, p.vital = 0, checkpoint(run), false, 5
     p.lastHurt = nil
     p.immunity = run.clock + 6
 end
 function M.exit(_, p)
-    p.tiny, p.cracker, p.vital = nil, nil, nil
+    p.tiny, p.vital = nil, nil
 end
 local function toolsAt(k)
     if k >= 17 then
@@ -209,7 +209,20 @@ function M.unlocked(run)
     return toolsAt(run.progress)
 end
 local function mob(run, kind, x, z, hp)
-    run.actors[#run.actors + 1] = { kind = kind, x = x, z = z, hp = hp, ice = 0, small = 0, dx = 0, dz = 0 }
+    run.nextActor = (run.nextActor or 0) + 1
+    run.actors[#run.actors + 1] = {
+        id = run.nextActor,
+        yaw = 0,
+        stride = 0,
+        kind = kind,
+        x = x,
+        z = z,
+        hp = hp,
+        ice = 0,
+        small = 0,
+        dx = 0,
+        dz = 0,
+    }
 end
 local function advance(run)
     run.progress = math.min(#stops, run.progress + 1)
@@ -247,10 +260,18 @@ local function advance(run)
         end
     end
 end
+local function roofHeight(z)
+    return Hall.clamp((z + 9) * 0.2955, 0, 3.25)
+end
+local function eyeHeight(p)
+    return p.tiny and 0.56 or 1.55 + roofHeight(p.z)
+end
 function M.start(run)
     run.progress, run.clock, run.launch, run.charge, run.actors = 1, 0, 0, 0, {}
     run.secrets, run.job, run.liftoff, run.drive, run.changed = 0, 0, 0, 1, 0
     run.track, run.loadX, run.loadZ, run.boost, run.raid = 0, 0, 0, 0, 0
+    mob(run, 1, -3, 0, 2)
+    mob(run, 1, 3, -4, 2)
 end
 function M.move(x, z, dx, dz, run, p)
     local wing = wingAt(x, z) or wingAt(x + dx, z + dz)
@@ -364,6 +385,10 @@ function M.step(run, r, dt)
             if player then
                 local dx, dz = player.x - a.x, player.z - a.z
                 local len = math.max(0.01, math.sqrt(best))
+                local oldX, oldZ = a.x, a.z
+                if a.ice <= run.clock then
+                    a.yaw = math.deg(math.atan2(dx, dz))
+                end
                 if a.kind == 3 then
                     if run.slide then
                         a.x, a.z = a.x + run.slideX * 9 * dt, a.z + run.slideZ * 9 * dt
@@ -398,6 +423,12 @@ function M.step(run, r, dt)
                                 end
                             end
                         end
+                    elseif run.progress == 19 then
+                        -- The stunned Queen staggers into the shipping crate behind its painted target.
+                        local cx, cz = -a.x, -290 - a.z
+                        local reach = math.sqrt(cx * cx + cz * cz)
+                        local step = math.min(1, dt * 3 / math.max(0.01, reach))
+                        a.x, a.z = a.x + cx * step, a.z + cz * step
                     end
                 elseif
                     a.small > run.clock
@@ -405,6 +436,8 @@ function M.step(run, r, dt)
                     and (a.kind == 5 or a.kind <= 2 or a.kind == 7)
                 then
                     a.hp = 0
+                    a.impact =
+                        { at = run.clock, owner = player.id, seq = player.seq, dx = 0, dz = 0, result = 2 }
                     if a.kind == 5 and run.progress == 13 then
                         advance(run)
                     end
@@ -412,6 +445,7 @@ function M.step(run, r, dt)
                     local speed = a.kind == 7 and 2.3 or 1.1
                     a.x, a.z = a.x + dx / len * dt * speed, a.z + dz / len * dt * speed
                 end
+                a.stride = (a.stride + math.sqrt(dist(oldX, oldZ, a.x, a.z))) % 256
                 if
                     a.hp > 0
                     and a.ice <= run.clock
@@ -432,7 +466,7 @@ function M.step(run, r, dt)
     end
 end
 local function aimed(p, x, z, dx, dy, dz, y, radius)
-    local ax, ay, az = x - p.x, y - (p.tiny and 0.6 or 1.55) - (p.oy or 0), z - p.z
+    local ax, ay, az = x - p.x, y - (p.eye or eyeHeight(p)) - (p.oy or 0), z - p.z
     local along = ax * dx + ay * dy + az * dz
     return along >= -0.3 and along < 36 and ax * ax + ay * ay + az * az - along * along < radius * radius
 end
@@ -470,60 +504,64 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
     end
     dx, dy, dz = dx / length, dy / length, dz / length
     p.seq, p.cool, p.weapon = seq, r.time + M.delays[k], k
+    local origin = { x = p.x + (ox or 0), z = p.z + (oz or 0), eye = eyeHeight(p), oy = oy or 0 }
     if not inTransit(run) and jobTool(run) == k then
         local tx, tz = destination(run)
-        if aimed(p, tx, tz, dx, dy, dz, 1.4, 1.8) then
+        if aimed(origin, tx, tz, dx, dy, dz, 1.4, 1.8) then
             finishJob(run)
-        end
-    end
-    local origin = { x = p.x + (ox or 0), z = p.z + (oz or 0), tiny = p.tiny, oy = oy or 0 }
-    local x, z = M.cart(run)
-    if k == 1 and not p.cracker then
-        local rides = aimed(origin, x, z, dx, dy, dz, 1.2, 2.4)
-        local range = 7
-        for _, a in ipairs(run.actors) do
-            if a.hp > 0 and aimed(origin, a.x, a.z, dx, dy, dz, 1.2, 1.4) then
-                range = math.min(range, math.sqrt(dist(p.x, p.z, a.x, a.z)))
-            end
-        end
-        p.cracker = {
-            x = rides and x or origin.x + dx * range,
-            z = rides and z or origin.z + dz * range,
-            rides = rides,
-        }
-        return
-    end
-    if k == 1 then
-        local c = p.cracker
-        p.cracker = nil
-        if not c.rides then
-            x, z = c.x, c.z
-        end
-        if c.rides and math.abs(x) < 2.2 and (run.progress == 3 or run.progress == 19) then
-            advance(run)
         end
     end
     local closest, distance = nil, math.huge
     for _, a in ipairs(run.actors) do
-        local d = dist(p.x, p.z, a.x, a.z)
+        local d = dist(origin.x, origin.z, a.x, a.z)
+        local height = a.kind == 2 and 2.0 or a.kind == 7 and 0.72 or 1.18
+        local radius = a.kind == 7 and 0.95 or a.kind >= 4 and 1.8 or 1.05
+        if a.small > run.clock then
+            height, radius = 0.45, 0.65
+        end
         if
             a.hp > 0
             and d < distance
-            and aimed(origin, a.x, a.z, dx, dy, dz, 1.1, a.kind >= 4 and 2 or 1.3)
+            and aimed(origin, a.x, a.z, dx, dy, dz, height + roofHeight(a.z), radius)
         then
             closest, distance = a, d
         end
     end
+    if run.progress == 3 or run.progress == 19 then
+        local x, z = M.cart(run)
+        if run.progress == 3 then
+            x = 0
+        end
+        if dist(origin.x, origin.z, x, z) < distance and aimed(origin, x, z, dx, dy, dz, 1.65, 1.1) then
+            if run.progress == 19 then
+                for _, boss in ipairs(run.actors) do
+                    if boss.kind == 6 then
+                        boss.hp = 0
+                        boss.impact =
+                            { at = run.clock, owner = p.id, seq = seq, dx = dx, dz = dz, result = 2 }
+                    end
+                end
+            end
+            advance(run)
+            return
+        end
+    end
     for _, a in ipairs(run.actors) do
         local hit = a == closest or (k == 3 and closest and dist(a.x, a.z, closest.x, closest.z) < 20)
-        if k == 1 then
-            hit = dist(a.x, a.z, x, z) < 25
-        end
         if hit and a.hp > 0 then
-            if k == 2 then
-                a.ice = run.clock + 12
+            local hp = a.hp
+            local frozen = a.ice > run.clock
+            local result = 1 -- hit, defeat, armor, freeze, shrink
+
+            local grunt = a.kind <= 2 or a.kind == 7
+            if a.kind == 6 or (a.kind == 4 and k ~= 3) or (a.kind == 5 and k ~= 4) then
+                result = 3
+            elseif grunt and frozen then
+                a.hp = 0
+            elseif k == 2 then
+                result, a.ice = 4, run.clock + 12
             elseif k == 4 then
-                a.small = run.clock + 16
+                result, a.small = 5, run.clock + 16
             elseif a.kind == 4 and k == 3 and run.progress == 8 then
                 a.hp = 0
                 advance(run)
@@ -534,7 +572,13 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
                 end
             elseif a.kind <= 2 or a.kind == 7 then
                 a.hp = math.max(0, a.hp - (k == 3 and 4 or 1))
+            else
+                result = 3
             end
+            if a.hp == 0 or (a.kind == 3 and hp == 1 and a.mascot) then
+                result = 2
+            end
+            a.impact = { at = run.clock, owner = p.id, seq = seq, dx = dx, dz = dz, result = result }
         end
     end
 end
@@ -668,21 +712,30 @@ function M.snapshot(rows, run, players, day)
         emit("3 %d %.2f %.2f %.2f", run.track, run.loadX, run.loadZ, run.boost)
     end
     for _, a in ipairs(run.actors) do
-        emit("1 %d %.2f %.2f %d %.2f %.2f %d", a.kind, a.x, a.z, a.hp, a.ice, a.small, a.mascot and 1 or 0)
+        local h = a.impact
+        emit(
+            "1 %d %.2f %.2f %d %.2f %.2f %d %d %.1f %.2f %.3f %d %d %.2f %.2f %d",
+            a.kind,
+            a.x,
+            a.z,
+            a.hp,
+            a.ice,
+            a.small,
+            a.mascot and 1 or 0,
+            a.id,
+            a.yaw,
+            a.stride,
+            h and h.at or 0,
+            h and h.owner or 0,
+            h and h.seq or 0,
+            h and h.dx or 0,
+            h and h.dz or 0,
+            h and h.result or 0
+        )
     end
     for id, p in pairs(players) do
         if p.space == day then
-            local c = p.cracker
-            emit(
-                "2 %d %d %d %d %.2f %.2f %d",
-                id,
-                p.tiny and 1 or 0,
-                p.vital,
-                c and 1 or 0,
-                c and c.x or 0,
-                c and c.z or 0,
-                c and c.rides and 1 or 0
-            )
+            emit("2 %d %d %d %d", id, p.tiny and 1 or 0, p.vital, p.seq)
         end
     end
 end
@@ -700,21 +753,32 @@ function M.read(r, w)
         run.track, run.loadX, run.loadZ, run.boost = w[4], w[5], w[6], w[7]
     elseif
         w[3] == 1
-        and #w == 10
+        and #w == 19
         and run.actors
         and #run.actors < 32
         and w[4] % 1 == 0
         and w[4] >= 1
         and w[4] <= 7
     then
-        run.actors[#run.actors + 1] =
-            { kind = w[4], x = w[5], z = w[6], hp = w[7], ice = w[8], small = w[9], mascot = w[10] == 1 }
-    elseif w[3] == 2 and #w == 10 and r.players[w[4]] then
-        local p = r.players[w[4]]
-        p.tiny, p.vital = w[5] == 1, w[6]
-        if w[7] == 1 then
-            p.cracker = { x = w[8], z = w[9], rides = w[10] == 1 }
+        local a = {
+            kind = w[4],
+            x = w[5],
+            z = w[6],
+            hp = w[7],
+            ice = w[8],
+            small = w[9],
+            mascot = w[10] == 1,
+            id = w[11],
+            yaw = w[12],
+            stride = w[13],
+        }
+        if w[19] > 0 and w[19] <= 5 then
+            a.impact = { at = w[14], owner = w[15], seq = w[16], dx = w[17], dz = w[18], result = w[19] }
         end
+        run.actors[#run.actors + 1] = a
+    elseif w[3] == 2 and #w == 7 and r.players[w[4]] then
+        local p = r.players[w[4]]
+        p.tiny, p.vital, p.seq = w[5] == 1, w[6], w[7]
     else
         return false
     end
@@ -726,8 +790,8 @@ function M.validSnapshot(run, player)
 end
 
 -- Client-only presentation. The dedicated service loads no artwork.
-local art, nodes, actors, crackers, eggs = {}, {}, {}, {}, {}
-local gunArt = { "cracker", "freezer", "rocket", "shrinker", "twins" }
+local art, nodes, actors, eggs = {}, {}, {}, {}
+local gunArt = { "pistol", "freezer", "rocket", "shrinker", "twins" }
 local pocket
 local labels = {}
 local function place(name, model, x, y, z, size)
@@ -767,7 +831,7 @@ function M.build(space, pedestal)
         "out",
         "corn",
         "poster",
-        "cracker",
+        "bullseye",
         "freezer",
         "shrinker",
         "twins",
@@ -784,7 +848,7 @@ function M.build(space, pedestal)
     for _, name in ipairs({
         "use",
         "freeze",
-        "click",
+        "aim",
         "shrink",
         "clear",
         "escort",
@@ -811,22 +875,208 @@ function M.build(space, pedestal)
     eng.scene.set_mesh(nodes.boxDoor, World.box, { color = { 0.42, 0.19, 0.12, 1 } })
     eng.scene.set_scale(nodes.boxDoor, 0.32, 4, 6.4)
     nodes.beacon = place("Dispatch beacon", "rocket", 0, -80, 0, 0.22)
-    nodes.latch = place("Gold stage latch", "plywood", 0, -80, 0, 0.28)
+    nodes.latch = place("Striped stage target", "bullseye", 0, -80, 0, 1)
     nodes.parcel = place("Live cargo", "cart", 0, -80, 0, 0.8)
     nodes.gate = eng.scene.spawn("Freight shutter")
     eng.scene.set_pocket(nodes.gate, pocket)
     eng.scene.set_mesh(nodes.gate, World.box, { color = { 0.40, 0.15, 0.10, 1 }, emissive = 0.07 })
     eng.scene.set_scale(nodes.gate, 6, 3.7, 0.25)
-    for i = 1, 8 do
-        crackers[i] = place("Remote snow cracker", "cart", 0, -80, 0, 0.21)
-    end
+    art.pistol = eng.asset.load_mesh("assets/pistol.glb")
 end
 local actorModels = { "usher", "courier", "skater", "loader", "guard", "queen", "hatchling" }
+-- The hip and shoulder pivots match the loose limb meshes made by make_day_one.py.
+local modelScale = { 1, 0.85, 1, 1.65, 1.3, 2.15, 0.53 }
+local strideRate = { 3.8, 4, 2.2, 2.8, 3.2, 1.8, 5.5 }
+local impactNames = { "Hit", "Cleared", "Armored", "Frozen", "Shrunk" }
+local impactSounds = { "thup1", "poof", "tok", "d1-freeze", "d1-shrink" }
+local function contact(g, a, h)
+    local owned = h.owner == g.id
+    local y = roofHeight(a.z) + (a.kind == 2 and 2.1 or a.kind == 7 and 0.65 or 1.2)
+    if owned and h.result ~= 3 then
+        Feedback.mark(g, { seq = h.seq, x = a.x, y = y, z = a.z }, h.result == 2)
+    end
+    if owned and h.result ~= 1 then
+        Feedback.caption(
+            g,
+            impactNames[h.result],
+            a.x,
+            y + 0.5,
+            a.z,
+            h.result == 2 and "finish" or "ticks",
+            0.4
+        )
+    end
+    Feedback.sound(
+        g,
+        impactSounds[h.result],
+        h.result == 2 and 0.58 or 0.42,
+        0.95 + 0.045 * (h.seq % 3),
+        owned and 3 or 1,
+        a.x,
+        y,
+        a.z,
+        34
+    )
+    local kind = (h.result == 3 or (h.result == 2 and a.ice > h.at)) and "gear"
+        or h.result == 5 and "mote"
+        or "powder"
+    local count = h.result == 2 and 8 or 4
+    for i = 1, count do
+        local theta = i * 2.4 + h.seq
+        Feedback.particle(
+            g,
+            kind,
+            a.x,
+            y,
+            a.z,
+            math.cos(theta) * 2 - h.dx,
+            0.4 + i % 3,
+            math.sin(theta) * 2 - h.dz,
+            0.10 + i % 3 * 0.035,
+            0.22 + i % 3 * 0.055
+        )
+    end
+end
+
+local function animateActor(g, run, a, i, t, motion)
+    local slot = actors[i]
+    if not slot then
+        slot = { node = place("Dispatch crew", actorModels[a.kind], 0, -80, 0, 1), limbs = {} }
+        actors[i] = slot
+    end
+    local h = a.impact
+    local age = h and math.max(0, t - h.at) or 100
+    local hit = math.max(0, 1 - age / 0.24)
+    local frozen = a.ice > t
+    local flash = hit > 0.55 and motion > 0 and g.feedback.prefs[2] > 25
+    local model = actorModels[a.kind]
+    local style = model .. tostring(frozen) .. tostring(flash) .. tostring(a.mascot)
+    local scale = modelScale[a.kind]
+    if slot.style ~= style then
+        local material = {
+            tex = World.palette,
+            metallic = -4,
+            roughness = 0.82,
+            emissive = frozen and { 0.12, 0.35, 0.53 } or flash and { 0.34, 0.23, 0.10 } or 0.04,
+            color = a.mascot and { 0.55, 1, 0.75, 1 } or { 1, 1, 1, 1 },
+        }
+        eng.scene.set_mesh(slot.node, art[model], material)
+        if a.kind ~= 7 then
+            for j = 1, 4 do
+                local leg = j <= 2
+                local part = model .. (leg and "-leg" or "-arm")
+                art[part] = art[part] or eng.asset.load_mesh("missions/day_01/" .. part .. ".glb")
+                if not slot.limbs[j] then
+                    slot.limbs[j] = place(part, part, 0, 0, 0, 1)
+                    eng.scene.set_parent(slot.limbs[j], slot.node)
+                end
+                local side = j % 2 == 1 and -1 or 1
+                eng.scene.set_mesh(slot.limbs[j], art[part], material)
+                eng.scene.set_pos(
+                    slot.limbs[j],
+                    side * (leg and 0.26 or 0.55) * scale,
+                    (leg and 0.58 or 1.26) * scale,
+                    0
+                )
+                eng.scene.set_scale(slot.limbs[j], scale, scale, scale)
+            end
+        end
+        slot.style = style
+    end
+    if
+        h
+        and age < 0.40
+        and h.at >= g.feedback.dayJoined
+        and (slot.id ~= a.id or slot.seq ~= h.seq or slot.owner ~= h.owner or slot.at ~= h.at)
+    then
+        contact(g, a, h)
+        slot.id, slot.seq, slot.owner, slot.at = a.id, h.seq, h.owner, h.at
+    end
+    local stride = (a.stride or 0) * strideRate[a.kind]
+    local gait = frozen and 0 or math.sin(stride) * motion
+    local hover = frozen and 0 or math.sin(t * 4 + i) * motion
+    local y = roofHeight(a.z) + (a.kind == 2 and 0.85 + hover * 0.16 or 0.09 * math.abs(gait))
+    local fallen = a.hp <= 0 and math.min(1, age / 0.32) or 0
+    local recoil = hit * hit * motion
+    local dx, dz = h and h.dx or 0, h and h.dz or 0
+    local visible = a.kind ~= 7 and (a.hp > 0 or fallen < 1)
+    eng.scene.set_pos(
+        slot.node,
+        a.x + dx * 0.32 * recoil,
+        visible and y - fallen * 0.22 or -80,
+        a.z + dz * 0.32 * recoil
+    )
+    local windup = a.kind == 6 and run.progress == 18 and run.charge - t > 3.8
+    local facing = math.rad(a.yaw or 0)
+    local forward = dx * math.sin(facing) + dz * math.cos(facing)
+    local side = dx * math.cos(facing) - dz * math.sin(facing)
+    eng.scene.set_rot_deg(
+        slot.node,
+        (windup and -18 or 0) * motion + 19 * forward * recoil + fallen * 65 * motion,
+        a.yaw or 0,
+        (a.kind == 3 and 11 or 4) * gait - side * 19 * recoil
+    )
+    local size = (a.small > t and 0.27 or 1) * (1 - fallen * 0.65)
+    eng.scene.set_scale(slot.node, size, size * (1 - 0.09 * recoil), size)
+    if a.kind ~= 7 then
+        for j, node in ipairs(slot.limbs) do
+            local leg = j <= 2
+            local swing = (j % 2 == 1 and 1 or -1) * gait
+            local angle = leg and swing * 32 or -swing * 28 - 32 * recoil
+            local roll = 0
+            if a.kind == 2 then
+                angle = leg and 18 + hover * 7 or -25 - hover * 13
+            elseif a.kind == 3 or a.kind == 6 then
+                roll = swing * (leg and 18 or -24)
+            elseif a.kind == 4 then
+                angle = leg and 0 or -12 - 32 * recoil + hover * 4
+            end
+            if frozen then
+                angle, roll = 0, 0
+            end
+            eng.scene.set_rot_deg(node, angle, 0, roll)
+        end
+    end
+end
+
 function M.presentShot(g, aim)
-    local sounds = { "d1-remote", "d1-freeze", "rocketthrow", "d1-shrink", "d1-twins" }
+    local sounds = { "snap" .. (1 + g.seq % 3), "d1-freeze", "rocketthrow", "d1-shrink", "d1-twins" }
     Feedback.sound(g, sounds[g.weapon], 0.72, g.weapon == 5 and (0.93 + 0.13 * (g.seq % 2)) or 1, 3)
-    g.feedback.kickStart, g.recoil = g.clock, Feedback.kick[g.weapon]
-    g.dayShot = { at = g.clock, dx = aim.dx, dy = aim.dy, dz = aim.dz, ox = aim.ox, oy = aim.oy, oz = aim.oz }
+    if g.xr and Feedback.on("FIRE-09") and g.feedback.prefs[4] > 0 then
+        g.feedback.pulse = Feedback.pulseMs[g.weapon] * 1000
+            + math.floor(g.feedback.prefs[4] * Feedback.pulseGain[g.weapon])
+    end
+    g.feedback.kickStart, g.recoil = g.clock, Feedback.kick[g.weapon] * g.feedback.prefs[1] / 100
+    local eye = eyeHeight(g.room.players[g.id])
+    local side = g.xr and 0 or 0.12
+    local x = g.x + aim.ox - aim.dz * side
+    local y = eye + aim.oy - (g.xr and 0 or 0.09)
+    local z = g.z + aim.oz + aim.dx * side
+    g.dayShot = {
+        at = g.clock,
+        dx = aim.dx,
+        dy = aim.dy,
+        dz = aim.dz,
+        x = x,
+        y = y,
+        z = z,
+        tool = g.weapon,
+        seq = g.seq,
+    }
+    if g.feedback.prefs[1] > 0 then
+        Feedback.particle(
+            g,
+            "powder",
+            x + aim.dx * 0.72,
+            y + aim.dy * 0.72,
+            z + aim.dz * 0.72,
+            aim.dx,
+            0.3 + aim.dy,
+            aim.dz,
+            0.075,
+            0.08
+        )
+    end
 end
 function M.render(g, dt)
     local run = g.room.instances[1]
@@ -844,7 +1094,7 @@ function M.render(g, dt)
     if phase == 18 then
         set(nodes.latch, post[1], 2.5 + 0.15 * math.sin(t * 6) * motion, post[2])
     else
-        set(nodes.latch, 0, 2.6, cz)
+        set(nodes.latch, phase == 19 and cx or 0, (phase == 19 or phase == 3) and 1.65 or -80, cz + 0.28)
     end
     local drop = (phase == 4 or phase == 20) and math.min(5.1, 14 * (t - run.changed) ^ 2) or 5.1
     set(nodes.plywood, 0, (phase == 3 or phase == 19) and 3.6 or 3.6 - drop, cz - 0.8)
@@ -879,46 +1129,19 @@ function M.render(g, dt)
         Feedback.sound(g, cue, 0.62, phase == 11 and 0.65 or 1, 3)
         g.scenePhase = phase
     end
+    if g.sampleClock ~= t then
+        g.sampleClock, g.sampleAt = t, g.clock
+    end
+    local animTime = t + Hall.clamp(g.clock - g.sampleAt, 0, 0.15)
+    g.feedback.dayJoined = g.feedback.dayJoined or t
     for i, a in ipairs(run.actors) do
-        local slot = actors[i]
-        if not slot then
-            slot = { node = place("Lunar dispatch crew", actorModels[a.kind], a.x, 0, a.z, 1) }
-            actors[i] = slot
-        end
-        local frozen = a.ice > t
-        if slot.kind ~= a.kind or slot.frozen ~= frozen or slot.mascot ~= a.mascot then
-            eng.scene.set_mesh(slot.node, art[actorModels[a.kind]], {
-                tex = World.palette,
-                metallic = -4,
-                color = a.mascot and { 0.55, 1, 0.75, 1 } or { 1, 1, 1, 1 },
-                emissive = frozen and { 0.18, 0.48, 0.72 } or 0.04,
-            })
-            slot.kind, slot.frozen, slot.mascot = a.kind, frozen, a.mascot
-        end
-        local stride = frozen and 0 or math.sin(t * (a.kind == 7 and 9 or 4) + i) * motion
-        local y = a.kind == 2 and 1 + 0.2 * stride or 0.08 * math.abs(stride)
-        set(slot.node, a.x, a.hp > 0 and a.kind ~= 7 and y or -80, a.z)
-        local windup = a.kind == 6 and phase == 18 and run.charge - t > 3.8
-        spin(slot.node, windup and -18 or 0, math.deg(math.atan2(g.x - a.x, g.z - a.z)), stride * 5)
-        local factor = a.small > t and 0.27 or 1
-        size(slot.node, factor, factor, factor)
+        animateActor(g, run, a, i, animTime, motion)
     end
     for i = #run.actors + 1, #actors do
         set(actors[i].node, 0, -80, 0)
     end
-    for id, e in ipairs(crackers) do
-        local friend = g.room.players[id]
-        local c = friend and friend.cracker
-        set(
-            e,
-            c and (c.rides and cx or c.x) or 0,
-            c and (c.rides and 1.45 or 0.18) or -80,
-            c and (c.rides and cz or c.z) or 0
-        )
-    end
     -- The roof, freight lift and midfield lift use the same camera path as walking.
-    local rise = Hall.clamp((p.z + 9) * 0.2955, 0, 3.25)
-    local eye = (p.tiny and phase == 15) and 0.56 or 1.55 + rise
+    local eye = eyeHeight(p)
     if World.selected ~= 100 + g.weapon then
         local gunMesh = g.weapon == 3 and eng.asset.load_mesh("assets/rocket.glb") or art[gunArt[g.weapon]]
         eng.scene.set_mesh(World.gun, gunMesh, { tex = World.palette, roughness = 0.65, emissive = 0.05 })
@@ -935,13 +1158,13 @@ function M.sprites(g)
     local cue = run.done and "home"
         or inTransit(run) and "escort"
         or ({
-            [3] = "click",
+            [3] = "aim",
             [4] = "freeze",
             [8] = "rocket",
             [10] = "launch",
             [13] = "shrink",
             [18] = "clear",
-            [19] = "click",
+            [19] = "aim",
         })[run.progress]
         or "use"
     if not inTransit(run) and jobTool(run) then
@@ -950,13 +1173,24 @@ function M.sprites(g)
     eng.render.draw_sprite(tx, 3.1, tz, 2.25, 0.60, labels[cue])
     for i, a in ipairs(run.actors) do
         if a.kind == 7 and a.hp > 0 then
-            local frame = math.floor(run.clock * 6 + i) % 4
-            eng.render.draw_sprite(a.x, 0.65, a.z, 1.3, 1.3, eggs[frame])
+            local motion = g.feedback.prefs[1] / 100
+            local step = (a.ice > run.clock or motion == 0) and 0 or (a.stride or 0) * 6
+            local frame = math.floor(step) % 4
+            local bump = a.impact and Hall.clamp(1 - (run.clock - a.impact.at) / 0.24, 0, 1) * motion or 0
+            local size = a.small > run.clock and 0.55 or 1.3
+            eng.render.draw_sprite(
+                a.x + (a.impact and a.impact.dx or 0) * bump * 0.25,
+                0.5 + 0.20 * math.abs(math.sin(step)) * motion,
+                a.z + (a.impact and a.impact.dz or 0) * bump * 0.25,
+                size * (1 + bump * 0.2),
+                size * (1 - bump * 0.2),
+                eggs[frame]
+            )
         end
     end
     local shot = g.dayShot
-    if shot and g.clock - shot.at < 0.18 then
-        local offset = g.weapon == 5 and ((g.seq % 2) * 0.44 - 0.22) or 0
+    if shot and g.clock - shot.at < 0.13 and g.feedback.prefs[2] > 0 then
+        local offset = shot.tool == 5 and ((shot.seq % 2) * 0.44 - 0.22) or 0
         local color = ({
             { 1, 0.77, 0.3 },
             { 0.42, 0.85, 1 },
@@ -967,13 +1201,13 @@ function M.sprites(g)
                 0.25,
                 0.39,
             },
-        })[g.weapon]
+        })[shot.tool]
         for i = 1, 4 do
-            local d = (g.clock - shot.at) * 35 + i * 0.35
+            local d = 0.50 + (g.clock - shot.at) * 70 + i * 0.23
             eng.render.draw_sprite(
-                g.x + shot.ox + shot.dx * d - shot.dz * offset,
-                1.48 + shot.oy + shot.dy * d,
-                g.z + shot.oz + shot.dz * d + shot.dx * offset,
+                shot.x + shot.dx * d - shot.dz * offset,
+                shot.y + shot.dy * d,
+                shot.z + shot.dz * d + shot.dx * offset,
                 0.17,
                 0.17,
                 World.snow,

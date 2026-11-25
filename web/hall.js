@@ -401,7 +401,7 @@ function updateHUD(text) {
     const name = missionTools ? missionTools.split(",")[Number(b.dataset.weapon) - 1] : b.dataset.hallName;
     b.setAttribute("aria-label", name);
     b.title = name;
-    if (missionTools) b.dataset.short = ["POP", "ICE", "RPG", "MINI", "TWIN"][Number(b.dataset.weapon) - 1];
+    if (missionTools) b.dataset.short = ["PST", "ICE", "RPG", "MINI", "TWIN"][Number(b.dataset.weapon) - 1];
     else delete b.dataset.short;
     b.disabled = !!missionTools && Number(b.dataset.weapon) > Number(unlocked);
     b.classList.toggle("selected", b.dataset.weapon === number);

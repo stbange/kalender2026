@@ -62,21 +62,6 @@ local function find(kind)
         end
     end
 end
-local function aimCart(player)
-    local x, z = m.cart(run)
-    player.x, player.z = x, z + 3
-    fire(1, x, z, player)
-    assert(player.cracker and player.cracker.rides)
-end
-local function remote()
-    run.clock = math.ceil(run.clock * 0.9 / (2 * math.pi)) * 2 * math.pi / 0.9
-    aimCart(p)
-    aimCart(crew)
-    sync()
-    fire(1, 0, p.z - 2)
-    assert(not p.cracker and crew.cracker)
-    fire(1, 0, crew.z - 2, crew)
-end
 local function jobs(phase)
     for i = 1, 4 do
         while m.inTransit(run) do
@@ -101,6 +86,35 @@ local function jobs(phase)
         assert(run.job == i, phase .. "-" .. i)
     end
 end
+-- Observe actual shoulder and hip transforms on the two opening ushers.
+do
+    local joints, rotations = {}, {}
+    local parent, rotate = eng.scene.set_parent, eng.scene.set_rot_deg
+    eng.scene.set_parent = function(id, root)
+        joints[#joints + 1] = id
+        parent(id, root)
+    end
+    eng.scene.set_rot_deg = function(id, x, y, z)
+        rotations[id] = x
+        rotate(id, x, y, z)
+    end
+    local actor = run.actors[1]
+    local motion = g.feedback.prefs[1]
+    g.feedback.prefs[1] = 100
+    actor.stride = 0.36
+    m.render(g, 0.016)
+    assert(#joints == 8 and rotations[joints[1]] * rotations[joints[2]] < 0)
+    assert(rotations[joints[1]] * rotations[joints[3]] < 0)
+    actor.ice = run.clock + 1
+    m.render(g, 0.016)
+    assert(rotations[joints[1]] == 0 and rotations[joints[4]] == 0)
+    actor.ice, g.feedback.prefs[1] = 0, 0
+    m.render(g, 0.016)
+    assert(rotations[joints[1]] == 0)
+    g.feedback.prefs[1] = motion
+    eng.scene.set_parent, eng.scene.set_rot_deg = parent, rotate
+end
+
 -- Internal barriers and entrances permit sliding around walls.
 local x, z = m.move(34, -21, 1, 0, run, p)
 assert(x == 35)
@@ -116,17 +130,45 @@ for phase = 1, #m.stops do
     local s = m.stops[phase]
     sync()
     if phase == 2 or phase == 6 or phase == 9 or phase == 16 then
+        if phase == 2 then
+            local a = find(1)
+            pos(a.x, a.z + 3)
+            local hp = a.hp
+            fire(1, a.x, a.z)
+            assert(a.hp == hp - 1 and a.impact.owner == p.id and a.impact.result == 1)
+            local snap = assert(Net.read(Net.snapshot(r)))
+            for _, other in ipairs(snap.instances[1].actors) do
+                if other.id == a.id then
+                    assert(other.impact.seq == p.seq and other.impact.result == 1)
+                end
+            end
+            sync()
+            assert(g.feedback.mark == "ticks")
+            fire(1, a.x, a.z)
+            sync()
+            assert(a.hp == 0 and a.impact.result == 2 and g.feedback.mark == "finish")
+        end
         jobs(phase)
     end
     pos(s[3], s[4] + 1)
     if phase == 3 or phase == 19 then
-        -- A missed timing window clears the charge and leaves the cart reusable.
-        run.clock = math.pi / 1.8
-        aimCart(p)
-        fire(1, 0, p.z - 1)
+        local cx, cz = m.cart(run)
+        local x = phase == 3 and 0 or cx
+        pos(x, cz + 3)
+        fire(1, x + 8, cz + 3)
         assert(run.progress == phase)
-        remote()
+        fire(1, x, cz)
+        assert(run.progress == phase + 1)
+        if phase == 19 then
+            assert(not find(6))
+        end
     elseif phase == 4 then
+        local ordinary = find(1)
+        pos(ordinary.x, ordinary.z + 2)
+        fire(2, ordinary.x, ordinary.z)
+        assert(ordinary.impact.result == 4 and ordinary.hp == 2)
+        fire(1, ordinary.x, ordinary.z)
+        assert(ordinary.impact.result == 2 and ordinary.hp == 0)
         local a = find(3)
         for i = 1, 4 do
             pos(a.x, a.z + 1.5)
@@ -150,6 +192,9 @@ for phase = 1, #m.stops do
         assert(late.z == -98)
         local a = find(4)
         pos(a.x, a.z + 3)
+        fire(1, a.x, a.z)
+        assert(a.hp == 5 and a.impact.result == 3)
+        sync()
         fire(3, a.x, a.z)
     elseif phase == 12 then
         use()

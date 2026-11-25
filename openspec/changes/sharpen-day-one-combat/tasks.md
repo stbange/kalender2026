@@ -1,0 +1,4 @@
+- [x] Replace remote combat and both remote-only gates with direct fire.
+- [x] Author and animate the crew's separate limb meshes and hatchling sprites.
+- [x] Replicate impacts and present distinct feedback for hit, armor, freeze, shrink and defeat.
+- [x] Exercise direct hits, co-op replication, the full route and touch and XR controls locally.

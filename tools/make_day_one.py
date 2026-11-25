@@ -332,35 +332,40 @@ def props():
     prize.beam((0, 2, 0), (-0.16, 1.85, 0), 0.045, 16)
     prize.beam((-0.16, 1.85, 0), (0, 1.7, 0), 0.045, 16)
     prize.save(str(ROOT.parent / "assets/brass-rocket"), indexed=True)
-    for name in ("cracker", "freezer", "shrinker", "twins"):
+    m = Model()
+    # Raised concentric metal plates remain readable against both the stage and the turf.
+    for width, depth, color in (
+        (1.55, 0, 1),
+        (1.39, 0.08, 17),
+        (1.06, 0.14, 11),
+        (0.62, 0.20, 17),
+        (0.31, 0.25, 12),
+    ):
+        m.box(0, 0, depth, width, width, 0.1, color)
+    save(m, "bullseye")
+    for name in ("freezer", "shrinker", "twins"):
         m = Model()
-        if name == "cracker":
-            m.box(0, 0, 0, 0.37, 0.45, 0.32, 1)
-            m.box(0, 0.24, 0, 0.18, 0.12, 0.15, 12)
-            m.box(0.12, 0.39, -0.08, 0.025, 0.48, 0.025, 3)
-            m.box(0, 0.03, -0.16, 0.23, 0.09, 0.04, 16)
-        else:
-            barrels = (-0.24, 0.24) if name == "twins" else (0,)
-            for x in barrels:
-                c = 24 if name == "freezer" else 20 if name == "shrinker" else 11
-                m.box(x, -0.13, 0.15, 0.20, 0.37, 0.22, 1)
-                m.box(x, 0.02, -0.03, 0.35, 0.27, 0.77, c)
-                for n in range(4):
-                    m.box(
-                        x,
-                        0.04,
-                        -0.45 + n * 0.13,
-                        0.4,
-                        0.32,
-                        0.055,
-                        26 if name == "freezer" else 22 if name == "shrinker" else 16,
-                    )
-                m.box(x, 0.04, -0.5, 0.24, 0.19, 0.1, 1)
+        barrels = (-0.24, 0.24) if name == "twins" else (0,)
+        for x in barrels:
+            c = 24 if name == "freezer" else 20 if name == "shrinker" else 11
+            m.box(x, -0.13, 0.15, 0.20, 0.37, 0.22, 1)
+            m.box(x, 0.02, -0.03, 0.35, 0.27, 0.77, c)
+            for n in range(4):
+                m.box(
+                    x,
+                    0.04,
+                    -0.45 + n * 0.13,
+                    0.4,
+                    0.32,
+                    0.055,
+                    26 if name == "freezer" else 22 if name == "shrinker" else 16,
+                )
+            m.box(x, 0.04, -0.5, 0.24, 0.19, 0.1, 1)
         save(m, name)
     for key, caption in (
         ("use", "USE"),
         ("freeze", "FREEZE"),
-        ("click", "REMOTE"),
+        ("aim", "SHOOT"),
         ("shrink", "SHRINK"),
         ("clear", "GOAL POST"),
         ("escort", "ESCORT"),
@@ -378,7 +383,7 @@ def props():
     for frame in range(4):
         im = Image.new("RGBA", (32, 32))
         d = ImageDraw.Draw(im)
-        bob = frame % 2
+        bob = (2, 0, -2, 0)[frame]
         d.ellipse((5, 8 + bob, 26, 26 + bob), fill="#31594a", outline="#152c2c", width=2)
         d.polygon(
             [(6, 13), (4, 3 + bob), (14, 11), (21, 8), (28, 3), (26, 15)],
@@ -387,8 +392,8 @@ def props():
         d.rectangle((8, 14 + bob, 13, 17 + bob), fill="#ffdb86")
         d.rectangle((19, 14 + bob, 24, 17 + bob), fill="#ffdb86")
         d.rectangle((12, 21, 20, 22), fill="#152c2c")
-        d.rectangle((5, 26 - bob, 12, 29 - bob), fill="#e7986e")
-        d.rectangle((19, 25 + bob, 26, 28 + bob), fill="#e7986e")
+        d.rectangle((4 + frame, 25 + bob, 12 + frame, 28 + bob), fill="#e7986e")
+        d.rectangle((19 - frame, 25 - bob, 27 - frame, 28 - bob), fill="#e7986e")
         file = f"egg-{frame}.png"
         im.save(ART / file)
         files.append("missions/day_01/" + file)
@@ -398,29 +403,34 @@ def props():
         s = [1, 0.85, 1, 1.65, 1.3, 2.15, 0.53][i]
         color = [11, 24, 12, 15, 20, 29, 22][i]
         m.transform = lambda x, y, z: (x * s, y * s, z * s)
-        for x in (-0.26, 0.26):
-            m.box(x, 0.27, 0, 0.36, 0.54, 0.48, 1)
-            m.box(x, 0.12, 0.17, 0.4, 0.2, 0.62, 3 if i == 2 else 0)
+        if name != "hatchling":
+            # Local shoulder and hip pivots drive each side independently at runtime.
+            arm, leg = Model(), Model()
+            arm.box(0, -0.20, 0, 0.29, 0.47, 0.35, color)
+            arm.box(0, -0.46, 0.09, 0.28, 0.23, 0.36, 8 if i < 4 else 21)
+            arm.box(0, -0.31, 0, 0.30, 0.12, 0.36, 16)
+            leg.box(0, -0.23, 0, 0.35, 0.48, 0.44, 1)
+            leg.box(0, -0.44, 0.12, 0.41, 0.22, 0.64, 3)
+            if i in (2, 5):
+                leg.box(0, -0.52, 0.14, 0.18, 0.08, 0.90, 16)
+                for z in (-0.18, 0.36):
+                    leg.box(0, -0.55, z, 0.35, 0.15, 0.17, 1)
+            if i == 3:
+                arm.beam((0, -0.32, 0), (0, -0.48, 0.58), 0.23, 15)
+            save(arm, name + "-arm")
+            save(leg, name + "-leg")
         m.box(0, 0.89, 0, 0.92, 0.83, 0.68, color)
         m.box(0, 1.55, 0.04, 0.79, 0.62, 0.61, 21 if i >= 4 else 8)
         m.box(0, 1.48, 0.39, 0.55, 0.24, 0.25, 13)
         for x in (-0.21, 0.21):
             m.box(x, 1.67, 0.36, 0.13, 0.12, 0.09, 17)
-            m.box(x * 2.8, 1.02, 0.11, 0.27, 0.55, 0.35, color)
             m.box(x * 1.7, 1.89, 0, 0.18, 0.29, 0.2, 16 if i == 5 else 8)
         m.box(0, 1.91, 0.02, 0.85, 0.16, 0.76, 16 if i == 5 else color)
-        if i == 2:
-            for x in (-0.26, 0.26):
-                m.box(x, 0.05, 0.12, 0.13, 0.1, 0.92, 3)
-                for z in (-0.22, 0.34):
-                    m.box(x, 0.08, z, 0.36, 0.16, 0.18, 0)
         if i == 3:
             for x in (-0.68, 0.68):
                 m.box(x, 0.48, -0.1, 0.37, 0.9, 1.3, 1)
                 for z in (-0.5, -0.12, 0.28):
                     m.box(x, 0.22, z, 0.39, 0.23, 0.26, 3)
-                m.box(x * 1.22, 1.05, 0.2, 0.40, 0.62, 0.52, 15)
-                m.beam((x * 1.22, 1.05, 0.2), (x * 1.5, 0.48, 0.65), 0.22, 3)
             m.box(0, 1.15, 0.53, 1.15, 0.75, 0.17, 8)
             m.box(0, 1.15, 0.64, 0.22, 0.75, 0.07, 16)
         if i == 5:
@@ -517,7 +527,6 @@ def soundtrack():
 
     # Short original tracker cues. The cinema phrase resolves at the lunar landing.
     cues = {
-        "d1-remote": ([910, 590], 0.045),
         "d1-freeze": ([950, 1160, 1440], 0.055),
         "d1-shrink": ([765, 574, 430, 322], 0.045),
         "d1-twins": ([155, 92], 0.038),
@@ -546,7 +555,7 @@ if __name__ == "__main__":
     for build in (cinema, diner, silos, flight, luna, bowl, props):
         build()
     catalog = {
-        "revision": "last-launch-open-1",
+        "revision": "tinseltown-pistol-1",
         "missions": [
             {
                 "day": 1,
