@@ -6,9 +6,9 @@ The public engine multiplayer helper broadcasts a single set of avatar transform
 
 ## Native secure invitations
 
-At engine revision `5efdb46`, browser clients support WSS and the native client accepts plain WS. The native build adds an OpenSSL filter to the engine’s existing SDL3_net byte stream. The engine still opens the socket, frames WebSocket messages and dispatches events. The filter verifies certificates, uses the DNS identity or IP address, and supplies SNI for DNS hosts. The release includes the Windows CA bundle and accepts a private CA through `--ca`.
+Engine revision `b0c1f7e` provides the native SDL3_net stream, BearSSL TLS 1.2 client, certificate and hostname verification, and WebSocket framing. It reads the native operating system's roots. The hall passes the optional `--ca` PEM to each engine peer through `eng_net_set_ca_pem`. The browser uses its own trust store and the engine's Emscripten WebSocket backend.
 
-CMake applies the native extension in the build directory. A clean submodule remains pinned to the published engine commit. The Web build uses the published source directly. The native service retains its 48-connection capacity and eight-seat room limit.
+Both builds compile the published engine source directly. The native build sets its peer capacity to 48 so one service can host six independent eight-seat rooms.
 
 ## Migration and validation
 

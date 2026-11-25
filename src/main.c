@@ -10,6 +10,7 @@ static const char *next_arg(int *i, int argc, char **argv) { return *i + 1 < arg
 int hall_run(int argc, char **argv)
 {
     hall_options o = {0};
+    const char *ca_file = NULL;
 #if defined(SIGPIPE) && !defined(__EMSCRIPTEN__)
     /* A departing friend may close a socket while the next snapshot is in flight. */
     signal(SIGPIPE, SIG_IGN);
@@ -41,7 +42,7 @@ int hall_run(int argc, char **argv)
         else if (!strcmp(a, "--test-clock"))
             o.fixture_clock = (time_t)strtoll(next_arg(&i, argc, argv), NULL, 10);
         else if (!strcmp(a, "--ca"))
-            o.ca = next_arg(&i, argc, argv);
+            ca_file = next_arg(&i, argc, argv);
         else if (!strcmp(a, "--test"))
             o.test = next_arg(&i, argc, argv);
         else if (!strcmp(a, "--frames"))
@@ -79,18 +80,17 @@ int hall_run(int argc, char **argv)
 #ifndef __EMSCRIPTEN__
     char ca[1024];
     snprintf(ca, sizeof(ca), "%s/cacert.pem", o.root);
-    if (!o.ca && SDL_GetPathInfo(ca, NULL))
-        o.ca = ca;
-    if (o.ca && !SDL_GetPathInfo(o.ca, NULL)) {
-        fprintf(stderr, "Cannot read CA file: %s\n", o.ca);
+    if (!ca_file && SDL_GetPathInfo(ca, NULL))
+        ca_file = ca;
+    char *ca_pem = ca_file ? SDL_LoadFile(ca_file, NULL) : NULL;
+    if (ca_file && (!ca_pem || !*ca_pem)) {
+        fprintf(stderr, "Cannot read CA file: %s\n", ca_file);
+        SDL_free(ca_pem);
         eng_runtime_destroy(rt);
         SDL_free(prefs);
         return 1;
     }
-    if (o.ca)
-        SDL_SetHint("ENG_NET_CA_FILE", o.ca);
-    else
-        SDL_ResetHint("ENG_NET_CA_FILE");
+    o.ca_pem = ca_pem;
 #endif
     int status = 0;
     if (o.doctor) {
@@ -111,6 +111,9 @@ int hall_run(int argc, char **argv)
             status = hall_client(rt, &o);
     }
     eng_runtime_destroy(rt);
+#ifndef __EMSCRIPTEN__
+    SDL_free(ca_pem);
+#endif
     SDL_free(prefs);
     return status;
 }

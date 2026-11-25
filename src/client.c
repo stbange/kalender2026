@@ -21,6 +21,7 @@ static struct {
     bool preferences;
     int preference_row;
     eng_net_peer_t *peer;
+    const char *ca_pem;
     uint64_t join_deadline;
     char hello[128];
     char active_endpoint[384], active_room[33];
@@ -98,7 +99,8 @@ WEB_EXPORT int hall_connect(const char *endpoint, const char *room)
     snprintf(app.active_endpoint, sizeof(app.active_endpoint), "%s", endpoint);
     snprintf(app.active_room, sizeof(app.active_room), "%s", room);
     app.peer = eng_net_create(ENG_NET_WEBSOCKET, 0);
-    if (!app.peer || !eng_net_connect_remote(app.peer, endpoint, 0)) {
+    if (!app.peer || !eng_net_set_ca_pem(app.peer, app.ca_pem) ||
+        !eng_net_connect_remote(app.peer, endpoint, 0)) {
         disconnect_room();
         hall_eval(app.rt, "host_receive('ERROR Could not connect. Check the room address.')", NULL, 0);
         return 0;
@@ -421,6 +423,7 @@ int hall_client(eng_runtime_t *rt, const hall_options *opts)
 {
     app.rt = rt;
     app.headless = opts->headless;
+    app.ca_pem = opts->ca_pem;
     app.preferences = false;
     app.preference_row = 0;
     eng_input_t *input = eng_runtime_input(rt);

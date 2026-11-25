@@ -9,8 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-void hall_test_tls(const char *cert, Uint16 port);
-
 static void key(SDL_Scancode scancode, SDL_Keymod modifier)
 {
     SDL_Event event;
@@ -115,8 +113,7 @@ static void test_service(eng_runtime_t *server_rt, eng_runtime_t *client_rt)
 
 int main(int argc, char **argv)
 {
-    assert(argc == 5);
-    hall_test_tls(argv[3], (Uint16)strtoul(argv[4], NULL, 10));
+    assert(argc == 3);
     char *root = argv[1], *tmp = argv[2];
     SDL_CreateDirectory(tmp);
     char engine_dir[1200], game_dir[1200], fixture[1200], catalog_dir[1200], catalog[1250];

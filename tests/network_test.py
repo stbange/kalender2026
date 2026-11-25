@@ -43,38 +43,36 @@ def service(binary, root, fixture=False):
             proc.wait(timeout=8)
 
 
-def test_certificate(directory, names="DNS:localhost"):
-    """Create a throwaway test identity and private trust anchor."""
-    key, cert = Path(directory) / "key.pem", Path(directory) / "ca.pem"
-    subprocess.run(
-        [
-            "openssl",
-            "req",
-            "-x509",
-            "-newkey",
-            "rsa:2048",
-            "-nodes",
-            "-days",
-            "1",
-            "-subj",
-            "/CN=localhost",
-            "-addext",
-            "subjectAltName=" + names,
-            "-keyout",
-            str(key),
-            "-out",
-            str(cert),
-        ],
-        check=True,
-        capture_output=True,
+def test_identity(directory):
+    """Issue a short-lived localhost certificate from an independent private root."""
+    root = Path(directory)
+    ca, ca_key = root / "ca.pem", root / "ca.key"
+    cert, key = root / "room.pem", root / "room.key"
+    request, extensions = root / "room.csr", root / "room.ext"
+
+    def openssl(*args):
+        subprocess.run(["openssl", *args], check=True, capture_output=True)
+
+    openssl(
+        "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+        "-subj", "/CN=Hall test root", "-addext", "basicConstraints=critical,CA:TRUE",
+        "-keyout", ca_key, "-out", ca,
     )
-    return cert, key
+    openssl("req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=localhost",
+            "-keyout", key, "-out", request)
+    extensions.write_text(
+        "basicConstraints=critical,CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\n"
+        "extendedKeyUsage=serverAuth\nsubjectAltName=DNS:localhost\n"
+    )
+    openssl("x509", "-req", "-in", request, "-CA", ca, "-CAkey", ca_key, "-CAcreateserial",
+            "-days", "1", "-extfile", extensions, "-out", cert)
+    return cert, key, ca
 
 
 @contextlib.contextmanager
 def tls_proxy(port, directory):
     """Terminate TLS at the room boundary as the sample Caddy service does."""
-    cert, key = test_certificate(directory)
+    cert, key, ca = test_identity(directory)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(cert, key)
     seen_hosts = []
@@ -117,7 +115,7 @@ def tls_proxy(port, directory):
             thread.start()
             stack.callback(thread.join)
             stack.callback(listener.shutdown)
-        yield f"wss://localhost:{proxy.server_address[1]}", cert, seen_hosts
+        yield f"wss://localhost:{proxy.server_address[1]}", ca, seen_hosts
 
 
 class HallConnection(ClientConnection):

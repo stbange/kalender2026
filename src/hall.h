@@ -5,7 +5,7 @@
 #include <time.h>
 
 typedef struct {
-    const char *root, *game, *room, *endpoint, *test, *fixture, *save, *ca;
+    const char *root, *game, *room, *endpoint, *test, *fixture, *save, *ca_pem;
     bool headless, doctor, serve;
     unsigned port, frames;
     time_t fixture_clock;

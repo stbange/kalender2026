@@ -21,5 +21,5 @@ while pending:
         shutil.copy2(source, out / source.name)
         copied.add(key)
         pending.append(source)
-assert "sdl3.dll" in copied and any(n.startswith("libssl") for n in copied), copied
+assert "sdl3.dll" in copied, copied
 print("Packaged Windows libraries", ", ".join(sorted(copied)))

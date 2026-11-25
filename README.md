@@ -46,7 +46,7 @@ The service supports 48 simultaneous connections and eight players per room. Roo
 
 ## Build
 
-Clone with submodules on main. The engine pin is `5efdb46710e6ca42e71c315453272a9162e40c60`. Both the hall client and the dedicated service use its WebSocket peers, events and channels. Native builds use SDL3_net. The game build adds certificate-verified OpenSSL encryption to the engine’s native stream for secure invitations. Browsers use the engine’s Emscripten WebSocket backend. The repository follows [Ponytail](https://github.com/dietrichgebert/ponytail) and records its acceptance scenarios in [OpenSpec](openspec/changes/add-advent-hall/).
+Clone with submodules on main. The engine pin is `b0c1f7e0e22a1ee7d95f33ead218507e9f11eb60`. Both the hall client and the dedicated service use its WebSocket peers, events and channels. The engine handles native connections with SDL3_net and BearSSL, and browser connections with Emscripten WebSockets. Secure invitations use the same URL on every platform. The repository follows [Ponytail](https://github.com/dietrichgebert/ponytail) and records its acceptance scenarios in [OpenSpec](openspec/changes/add-advent-hall/).
 
 ```sh
 git clone --branch main --recurse-submodules https://github.com/stbange/kalender2026
@@ -57,7 +57,7 @@ python3 tools/package.py --build build --out dist/native
 dist/native/lantern
 ```
 
-Use a C11 compiler, CMake 3.20+, Ninja, Python 3, OpenSSL development libraries and SDL3 with OpenGL support. The engine uses an installed SDL3_net or fetches its pinned 3.2.0 release. On Linux use a desktop with Mesa or another working OpenGL driver. The Linux room needs no display. Windows builds use an MSYS2 UCRT64 shell with GCC, CMake, Ninja, SDL3 and OpenSSL. The workflow packages the required DLLs and Mozilla CA certificates.
+Use a C11 compiler, CMake 3.20+, Ninja, Git, Python 3 and SDL3 with OpenGL support. The engine fetches pinned BearSSL sources and uses an installed SDL3_net or fetches its pinned 3.2.0 release. The network tests use the OpenSSL command-line tool to create a temporary CA. On Linux use a desktop with Mesa or another working OpenGL driver. The Linux room needs no display. Windows builds use an MSYS2 UCRT64 shell with GCC, CMake, Ninja and SDL3. Secure connections use the operating system's roots by default.
 
 With Emscripten 4.0.15 active, build and serve the Web edition locally.
 
