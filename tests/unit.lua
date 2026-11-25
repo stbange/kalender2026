@@ -127,9 +127,9 @@ H.fire(ar, shooter, 3, 1, 0, -0.2, -1)
 H.step(ar, 0.10)
 assert(ar.mobs[1].hp == 0)
 for i = 1, 8 do
-    assert(Service.receive(i, "HELLO2 lantern-2 room", first) == "WELCOME " .. i)
+    assert(Service.receive(i, "HELLO3 lantern-2 room", first) == "WELCOME " .. i)
 end
-assert(Service.receive(9, "HELLO2 lantern-2 room", first) == "ERROR Room full")
+assert(Service.receive(9, "HELLO3 lantern-2 room", first) == "ERROR Room full")
 assert(Service.receive(9,"HELLO lantern-2 room",first):find("ERROR"))
 assert(Service.receive(9, "invalid", first):find("ERROR"))
 local rr = Service.rooms.room

@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+void hall_test_tls(const char *cert, Uint16 port);
+
 static void key(SDL_Scancode scancode, SDL_Keymod modifier)
 {
     SDL_Event event;
@@ -32,9 +34,36 @@ static int SDLCALL run_room(void *data)
     return hall_serve(room->rt, room->port, 1798066800);
 }
 
+static void test_engine_loopback(eng_runtime_t *rt)
+{
+    app.rt = rt;
+    eng_net_peer_t *server = eng_net_host(ENG_NET_LOOPBACK, NULL, 0);
+    app.peer = eng_net_create(ENG_NET_LOOPBACK, 0);
+    assert(server && app.peer && eng_net_connect_loopback(app.peer, server));
+    strcpy(app.hello, "HELLO3 lantern-2 friends");
+    app.join_deadline = SDL_GetTicks() + 8000;
+    network();
+    eng_net_event_t e;
+    char data[128] = {0};
+    assert(eng_net_poll_event(server, &e, data, sizeof(data)) && e.type == ENG_NET_EVT_CONNECT);
+    assert(eng_net_poll_event(server, &e, data, sizeof(data)) && e.type == ENG_NET_EVT_MESSAGE);
+    assert(e.chan == ENG_CHAN_RELIABLE && e.len == strlen(app.hello) && !memcmp(data, app.hello, e.len));
+    assert(eng_net_send_to(server, e.client_id, ENG_CHAN_RELIABLE, "WELCOME 1", 9));
+    network();
+    assert(!app.join_deadline);
+    eng_net_destroy(server);
+    network();
+    assert(!app.peer && hall_eval(rt, "return game.state.connection", data, sizeof(data)) &&
+           strstr(data, "Disconnected"));
+    app.peer = eng_net_create(ENG_NET_LOOPBACK, 0);
+    app.join_deadline = 1;
+    network();
+    assert(!app.peer && hall_eval(rt, "return game.state.connection", data, sizeof(data)) &&
+           strstr(data, "timed out"));
+}
+
 static void test_service(eng_runtime_t *server_rt, eng_runtime_t *client_rt)
 {
-    assert(bqws_pt_init(NULL));
     test_room room = {server_rt, 22000u + (unsigned)(SDL_GetPerformanceCounter() % 24000u)};
     SDL_Thread *thread = SDL_CreateThread(run_room, "room-unit", &room);
     assert(thread);
@@ -42,7 +71,7 @@ static void test_service(eng_runtime_t *server_rt, eng_runtime_t *client_rt)
     char url[64];
     snprintf(url, sizeof(url), "ws://127.0.0.1:%u", room.port);
     app.rt = client_rt;
-    app.ws = NULL;
+    app.peer = NULL;
     assert(hall_connect(url, "ctest"));
     char state[64] = {0};
     for (int i = 0; i < 200 && strcmp(state, "Live room"); i++) {
@@ -51,8 +80,8 @@ static void test_service(eng_runtime_t *server_rt, eng_runtime_t *client_rt)
         hall_eval(client_rt, "return game.state.connection", state, sizeof(state));
     }
     assert(!strcmp(state, "Live room"));
-    bqws_socket *original_socket = app.ws;
-    assert(hall_connect(url, "ctest") && app.ws == original_socket);
+    eng_net_peer_t *original_socket = app.peer;
+    assert(hall_connect(url, "ctest") && app.peer == original_socket);
     hall_eval(client_rt, "game.state.outbox={'BELL','P 0 17 0'}", NULL, 0);
     for (int i = 0; i < 24; i++) {
         network();
@@ -62,11 +91,11 @@ static void test_service(eng_runtime_t *server_rt, eng_runtime_t *client_rt)
     SDL_Delay(30);
     assert(hall_eval(client_rt, "old_revision=Hall.version; Hall.version='old-protocol'", NULL, 0));
     assert(hall_connect(url, "ctest"));
-    for (int i = 0; i < 200 && app.ws; i++) {
+    for (int i = 0; i < 200 && app.peer; i++) {
         network();
         SDL_Delay(5);
     }
-    assert(!app.ws);
+    assert(!app.peer);
     assert(hall_eval(client_rt, "Hall.version=old_revision", NULL, 0));
     assert(hall_connect(url, "ctest"));
     network();
@@ -74,20 +103,20 @@ static void test_service(eng_runtime_t *server_rt, eng_runtime_t *client_rt)
     int status;
     SDL_WaitThread(thread, &status);
     assert(status == 0);
-    for (int i = 0; i < 150 && app.ws; i++) {
+    for (int i = 0; i < 150 && app.peer; i++) {
         network();
         SDL_Delay(5);
     }
-    if (app.ws) {
-        bqws_free_socket(app.ws);
-        app.ws = NULL;
+    if (app.peer) {
+        eng_net_destroy(app.peer);
+        app.peer = NULL;
     }
-    bqws_pt_shutdown();
 }
 
 int main(int argc, char **argv)
 {
-    assert(argc == 3);
+    assert(argc == 5);
+    hall_test_tls(argv[3], (Uint16)strtoul(argv[4], NULL, 10));
     char *root = argv[1], *tmp = argv[2];
     SDL_CreateDirectory(tmp);
     char engine_dir[1200], game_dir[1200], fixture[1200], catalog_dir[1200], catalog[1250];
@@ -184,7 +213,6 @@ int main(int argc, char **argv)
     eng_ui_begin_frame(app.ui, 960, 540, 0, 0, false, 0);
     hall_feedback_overlay(rt, app.ui, 960, 540);
     eng_ui_render(app.ui);
-    assert(bqws_pt_init(NULL));
     hall_settings_text(&app.settings, "ws://127.0.0.1:1");
     hall_action("up", 1);
     hall_look(1, 2);
@@ -261,10 +289,10 @@ int main(int argc, char **argv)
     assert(hall_eval(rt, "draw=unit_draw", NULL, 0));
     eng_audio_destroy(app.audio);
     eng_ui_destroy(app.ui);
-    bqws_pt_shutdown();
     eng_runtime_t *server_rt = eng_runtime_create(&cfg);
     opts.serve = true;
     assert(server_rt && hall_load(server_rt, &opts));
+    test_engine_loopback(rt);
     test_service(server_rt, rt);
     eng_runtime_destroy(server_rt);
     eng_runtime_destroy(rt);

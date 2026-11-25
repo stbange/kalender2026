@@ -1,11 +1,9 @@
-Explore a first-person Christmas hall with 24 numbered advent portals, five snowcasters, five wandering visitors and a shared brass-bell range. Up to eight friends can meet in a room.
+The Lantern Hall 0.3.0 moves multiplayer to the updated engine. Windows, Linux, browsers and WebXR share the engine’s binary WebSocket format. Each room accommodates eight friends. The Linux service can host six full rooms.
 
-The five snowcasters have individual launch sounds, recoil and impact effects. Visitors have articulated movement, from alternating penguin skates to the Frost Wisp’s crystal wings. The range, sealed doors and midnight bell now respond to events in the shared room. Feedback preferences include reduced motion, captions, outlines and optional WebXR trigger vibration.
+Upgrade the Linux room service and the clients together. Enter the same room code and service URL in **Join friends** or in the native **F2** panel. Private-CA hosts can still use `--ca`. Room addresses, feedback preferences and ornaments are saved on the player’s device.
 
-Upgrade the dedicated room service along with the clients for this release. Existing local ornaments and room preferences carry over.
+- Extract the Windows or Linux client archive and launch Lantern, or [play the Web edition](https://stbange.github.io/kalender2026/).
+- Extract the Linux room archive and run `./lantern --server --port 8787`. The included Caddy and systemd examples support public secure invites.
+- The Web archive can be served from HTTPS or localhost. Scripts, art and sounds are editable alongside each build.
 
-- **Windows** and **Linux** archives contain the native game and editable content. Extract the entire archive and launch Lantern.
-- The **Linux room** archive contains the headless service and hosting examples. Set its WSS address in **Join friends**, or press **F2** on desktop.
-- The **Web** archive contains the WebGL2 game with automatic mobile controls and stereo WebXR. Serve its contents from an HTTPS web server or from localhost for local play.
-
-The doors follow midnight in Europe/Warsaw on December 1–24, 2026. The range and visitors are playable before Advent. Daily missions will arrive as separate packs. The game source uses MIT and original art and audio use CC BY 4.0.
+Original code uses MIT. Original art and audio use CC BY 4.0.

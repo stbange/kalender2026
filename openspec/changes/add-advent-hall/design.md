@@ -1,5 +1,7 @@
 # The Lantern Hall · design and delivery
 
+The original release used the networking described below. Version 0.3.0 uses the engine’s WebSocket transport. [Current multiplayer design](../use-engine-room-networking/design.md)
+
 ## Context
 
 The game repository began with an MIT license. The engine revision reviewed for this proposal is `bdf4265` on `stbange/engine/main`. Its C11 library, Lua 5.1 sandbox, pocket portals, FPS controls, retro renderer, headless runner and WebXR shell cover much of the client. Its upstream CI passed at this revision. The game also needs a real eight-player transport, a civil clock and coverage of its own scripts. [Game license](https://github.com/stbange/kalender2026/blob/main/LICENSE) · [Engine revision](https://github.com/stbange/engine/tree/bdf4265ebae2ca6b5f80e62d2796604ed1035847) · [Upstream CI](https://github.com/stbange/engine/actions/runs/45493621045)

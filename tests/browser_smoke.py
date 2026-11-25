@@ -143,9 +143,9 @@ def run(site, binary):
             try:
                 for _ in range(40):
                     page.wait_for_timeout(100)
-                    if any(str(msg).startswith("F ") for msg in sent):
+                    if any(isinstance(msg, bytes) and msg.startswith(b"\x01F ") for msg in sent):
                         break
-                assert any(str(msg).startswith("F ") for msg in sent), (
+                assert any(isinstance(msg, bytes) and msg.startswith(b"\x01F ") for msg in sent), (
                     sent[-10:],
                     page.evaluate("hudText"),
                 )

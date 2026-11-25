@@ -1,6 +1,5 @@
 #ifndef HALL_H
 #define HALL_H
-#include <bq_websocket_platform.h>
 #include <engine/engine.h>
 #include <stdint.h>
 #include <time.h>

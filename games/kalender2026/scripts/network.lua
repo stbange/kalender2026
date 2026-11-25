@@ -1,4 +1,4 @@
--- Text protocol shared by the socket service, clients and replay tests.
+-- Hall gameplay payloads carried inside engine WebSocket channel frames.
 Net = {}
 function Net.words(line)
     local out = {}
@@ -216,7 +216,7 @@ function Service.receive(slot, line, utc)
         return ""
     end
     local verb, version, room = line:match("^(%u+%d*) ([%w_%-%.]+) ([%w_%-]+)$")
-    if verb ~= "HELLO2" or version ~= Hall.version or #room > 32 then
+    if verb ~= "HELLO3" or version ~= Hall.version or #room > 32 then
         return "ERROR Refresh the game and check the room code"
     end
     local r = Service.rooms[room]

@@ -22,7 +22,7 @@ int hall_run(int argc, char **argv)
 #endif
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
-        if (!strcmp(a, "--serve"))
+        if (!strcmp(a, "--serve") || !strcmp(a, "--server"))
             o.serve = o.headless = true;
         else if (!strcmp(a, "--headless"))
             o.headless = true;
@@ -32,7 +32,7 @@ int hall_run(int argc, char **argv)
             o.root = next_arg(&i, argc, argv);
         else if (!strcmp(a, "--save"))
             o.save = next_arg(&i, argc, argv);
-        else if (!strcmp(a, "--endpoint"))
+        else if (!strcmp(a, "--endpoint") || !strcmp(a, "--connect"))
             o.endpoint = next_arg(&i, argc, argv);
         else if (!strcmp(a, "--room"))
             o.room = next_arg(&i, argc, argv);
@@ -55,7 +55,7 @@ int hall_run(int argc, char **argv)
     }
     if (!o.root || !o.port || o.port > 65535 || (o.fixture_clock && !o.fixture))
         return 2;
-    char engine[1024], game[1024], ca[1024];
+    char engine[1024], game[1024];
     snprintf(engine, sizeof(engine), "%s/engine", o.root);
     snprintf(game, sizeof(game), "%s/games/kalender2026", o.root);
     o.game = game;
@@ -76,23 +76,22 @@ int hall_run(int argc, char **argv)
         SDL_free(prefs);
         return 1;
     }
-    bqws_pt_init_opts net = {0};
 #ifndef __EMSCRIPTEN__
+    char ca[1024];
     snprintf(ca, sizeof(ca), "%s/cacert.pem", o.root);
     if (!o.ca && SDL_GetPathInfo(ca, NULL))
         o.ca = ca;
-#if defined(__linux__)
-    if (!o.ca)
-        o.ca = "/etc/ssl/certs/ca-certificates.crt";
-#endif
-    net.ca_filename = o.ca;
-#endif
-    if (!bqws_pt_init(&net)) {
-        fprintf(stderr, "Could not initialize networking or CA file\n");
+    if (o.ca && !SDL_GetPathInfo(o.ca, NULL)) {
+        fprintf(stderr, "Cannot read CA file: %s\n", o.ca);
         eng_runtime_destroy(rt);
         SDL_free(prefs);
         return 1;
     }
+    if (o.ca)
+        SDL_SetHint("ENG_NET_CA_FILE", o.ca);
+    else
+        SDL_ResetHint("ENG_NET_CA_FILE");
+#endif
     int status = 0;
     if (o.doctor) {
         eng_doctor_report_t report;
@@ -111,7 +110,6 @@ int hall_run(int argc, char **argv)
 #endif
             status = hall_client(rt, &o);
     }
-    bqws_pt_shutdown();
     eng_runtime_destroy(rt);
     SDL_free(prefs);
     return status;

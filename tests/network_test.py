@@ -13,7 +13,7 @@ import tempfile
 import threading
 import time
 
-from websockets.sync.client import connect
+from websockets.sync.client import ClientConnection, connect
 
 
 def free_port():
@@ -43,9 +43,8 @@ def service(binary, root, fixture=False):
             proc.wait(timeout=8)
 
 
-@contextlib.contextmanager
-def tls_proxy(port, directory):
-    """Terminate TLS at the room boundary as the sample Caddy service does."""
+def test_certificate(directory, names="DNS:localhost"):
+    """Create a throwaway test identity and private trust anchor."""
     key, cert = Path(directory) / "key.pem", Path(directory) / "ca.pem"
     subprocess.run(
         [
@@ -60,7 +59,7 @@ def tls_proxy(port, directory):
             "-subj",
             "/CN=localhost",
             "-addext",
-            "subjectAltName=DNS:localhost",
+            "subjectAltName=" + names,
             "-keyout",
             str(key),
             "-out",
@@ -69,6 +68,13 @@ def tls_proxy(port, directory):
         check=True,
         capture_output=True,
     )
+    return cert, key
+
+
+@contextlib.contextmanager
+def tls_proxy(port, directory):
+    """Terminate TLS at the room boundary as the sample Caddy service does."""
+    cert, key = test_certificate(directory)
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(cert, key)
     seen_hosts = []
@@ -95,20 +101,50 @@ def tls_proxy(port, directory):
             except OSError:
                 pass
 
-    with socketserver.ThreadingTCPServer(("127.0.0.1", 0), Relay) as proxy:
-        proxy.daemon_threads = True
-        thread = threading.Thread(target=proxy.serve_forever, daemon=True)
-        thread.start()
-        try:
-            yield f"wss://localhost:{proxy.server_address[1]}", cert, seen_hosts
-        finally:
-            proxy.shutdown()
-            thread.join()
+    # SDL_net and browser DNS can choose different loopback families for localhost.
+    class IPv6Proxy(socketserver.ThreadingTCPServer):
+        address_family = socket.AF_INET6
+
+    with contextlib.ExitStack() as stack:
+        proxy = stack.enter_context(socketserver.ThreadingTCPServer(("127.0.0.1", 0), Relay))
+        proxies = [proxy]
+        if socket.has_ipv6:
+            with contextlib.suppress(OSError):
+                proxies.append(stack.enter_context(IPv6Proxy(("::1", proxy.server_address[1]), Relay)))
+        for listener in proxies:
+            listener.daemon_threads = True
+            thread = threading.Thread(target=listener.serve_forever, daemon=True)
+            thread.start()
+            stack.callback(thread.join)
+            stack.callback(listener.shutdown)
+        yield f"wss://localhost:{proxy.server_address[1]}", cert, seen_hosts
+
+
+class HallConnection(ClientConnection):
+    """Use the same engine channel prefix that the shipping peers use."""
+
+    def send(self, message):
+        super().send(b"\x01" + message.encode("utf-8"))
+
+    def recv(self, timeout=None):
+        data = super().recv(timeout=timeout)
+        assert isinstance(data, bytes) and len(data) >= 2, "expected an engine binary frame"
+        channel, message = data[0], data[1:].decode("utf-8")
+        assert channel == (0 if message.startswith("S ") else 1)
+        return message
 
 
 def hello(url, room="friends", revision="lantern-2", **kwargs):
-    ws = connect(url, proxy=None, open_timeout=6, close_timeout=0.3, max_queue=None, **kwargs)
-    ws.send(f"HELLO2 {revision} {room}")
+    ws = connect(
+        url,
+        proxy=None,
+        open_timeout=6,
+        close_timeout=0.3,
+        max_queue=None,
+        create_connection=HallConnection,
+        **kwargs,
+    )
+    ws.send(f"HELLO3 {revision} {room}")
     answer = ws.recv(timeout=5)
     return ws, answer
 
@@ -225,7 +261,7 @@ def public_room(binary, root):
         joined = snapshot(new, lambda s: s["hits"] == 1)
         assert joined["wave"] == 1 and joined["latest"] == bell["id"]
         assert joined["seats"][8] != s["seats"][8]
-        new.send("HELLO2 lantern-2 friends")
+        new.send("HELLO3 lantern-2 friends")
         assert len(snapshot(new, lambda s: True)["players"]) == 8
         with tempfile.TemporaryDirectory() as tmp, tls_proxy(port, tmp) as (secure, cert, names):
             witness, answer = join("native")
@@ -254,11 +290,54 @@ def public_room(binary, root):
                 assert proc.wait(timeout=15) == 0
                 witness.send("P 0 17 122")
                 snapshot(witness, lambda s: len(s["players"]) == 1 and s["players"][1]["yaw"] == 122)
+                # A private CA is required, and trusting it does not allow the wrong host name.
+                for url, trust in [
+                    (secure, []),
+                    (secure.replace("localhost", "127.0.0.1"), ["--ca", str(cert)]),
+                ]:
+                    args = [
+                        str(binary),
+                        "--root",
+                        str(root),
+                        "--save",
+                        tmp,
+                        "--headless",
+                        "--connect",
+                        url,
+                        "--room",
+                        "native",
+                        "--frames",
+                        "40",
+                        *trust,
+                    ]
+                    with subprocess.Popen(args) as rejected:
+                        while rejected.poll() is None:
+                            assert len(snapshot(witness, lambda s: True)["players"]) == 1
+                        assert rejected.returncode == 0
             finally:
                 if proc.poll() is None:
                     proc.terminate()
                     proc.wait()
     print("Eight seats, ninth rejection, isolation, reconnect, shared bell and native TLS passed.")
+
+
+def capacity(binary, root):
+    with service(binary, root) as port, contextlib.ExitStack() as cleanup:
+        url = f"ws://127.0.0.1:{port}"
+        rooms = []
+        for number in range(6):
+            group = []
+            for seat in range(1, 9):
+                peer, welcome = hello(url, f"room-{number}")
+                cleanup.callback(peer.close)
+                assert welcome == f"WELCOME {seat}"
+                group.append(peer)
+            rooms.append(group)
+        rooms[-1][0].send("F 1 1 0 .0094 -.99996")
+        state = snapshot(rooms[-1][1], lambda s: s["hits"] == 1)
+        assert len(state["players"]) == 8
+        assert snapshot(rooms[0][0], lambda s: len(s["players"]) == 8)["hits"] == 0
+    print("Six independent eight-player rooms fit on one engine listener.")
 
 
 def coop(binary, root):
@@ -302,3 +381,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     public_room(args.binary.resolve(), args.root.resolve())
     coop(args.binary.resolve(), args.root.resolve())
+    capacity(args.binary.resolve(), args.root.resolve())

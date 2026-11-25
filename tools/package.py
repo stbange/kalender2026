@@ -72,7 +72,6 @@ def package(build, out, web, fixture=None, server=False):
             shutil.copytree(ROOT / folder, out / folder, dirs_exist_ok=True)
     copy(ROOT / "engine/THIRD_PARTY_NOTICES.md", out / "licenses/ENGINE-NOTICES.md")
     copy(ROOT / "engine/LICENSE", out / "licenses/engine-MIT.txt")
-    copy(ROOT / "third_party/bq_websocket/LICENSE", out / "licenses/bq-websocket.txt")
     if web:
         shutil.copytree(ROOT / "web", out, dirs_exist_ok=True)
         for file in ("lantern.js", "lantern.wasm"):

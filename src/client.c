@@ -20,7 +20,8 @@ static struct {
     hall_mix mix;
     bool preferences;
     int preference_row;
-    bqws_socket *ws;
+    eng_net_peer_t *peer;
+    uint64_t join_deadline;
     char hello[128];
     char active_endpoint[384], active_room[33];
     bool headless, failed, xr;
@@ -71,25 +72,20 @@ WEB_EXPORT void hall_lock(int state)
 }
 static void disconnect_room(void)
 {
-    if (!app.ws)
-        return;
-    if (bqws_get_state(app.ws) == BQWS_STATE_OPEN) {
-        bqws_send_text(app.ws, "BYE");
-        bqws_update(app.ws);
-        bqws_close(app.ws, BQWS_CLOSE_NORMAL, NULL, 0);
-        bqws_update(app.ws);
-    }
-    bqws_free_socket(app.ws);
-    app.ws = NULL;
+    if (eng_net_is_connected(app.peer))
+        eng_net_send(app.peer, ENG_CHAN_RELIABLE, "BYE", 3);
+    eng_net_destroy(app.peer);
+    app.peer = NULL;
+    app.join_deadline = 0;
 }
+
 WEB_EXPORT int hall_connect(const char *endpoint, const char *room)
 {
     if (!hall_valid_address(endpoint, room))
         return 0;
-    if (app.ws) {
-        if (!bqws_is_closed(app.ws) && !strcmp(endpoint, app.active_endpoint) &&
-            !strcmp(room, app.active_room))
-            return 1;
+    if (app.peer && !strcmp(endpoint, app.active_endpoint) && !strcmp(room, app.active_room))
+        return 1;
+    if (app.peer) {
         disconnect_room();
         hall_eval(app.rt, "host_receive('DISCONNECTED')", NULL, 0);
     }
@@ -98,49 +94,66 @@ WEB_EXPORT int hall_connect(const char *endpoint, const char *room)
     char version[64];
     if (!hall_eval(app.rt, "return Hall.version", version, sizeof(version)))
         return 0;
-    snprintf(app.hello, sizeof(app.hello), "HELLO2 %s %s", version, room);
+    snprintf(app.hello, sizeof(app.hello), "HELLO3 %s %s", version, room);
     snprintf(app.active_endpoint, sizeof(app.active_endpoint), "%s", endpoint);
     snprintf(app.active_room, sizeof(app.active_room), "%s", room);
-    app.ws = bqws_pt_connect(endpoint, NULL, NULL, NULL);
-    if (app.ws)
-        bqws_send_text(app.ws, app.hello);
-    else
-        hall_eval(app.rt, "host_receive('DISCONNECTED')", NULL, 0);
-    return app.ws != NULL;
+    app.peer = eng_net_create(ENG_NET_WEBSOCKET, 0);
+    if (!app.peer || !eng_net_connect_remote(app.peer, endpoint, 0)) {
+        disconnect_room();
+        hall_eval(app.rt, "host_receive('ERROR Could not connect. Check the room address.')", NULL, 0);
+        return 0;
+    }
+    app.join_deadline = SDL_GetTicks() + 8000;
+    hall_eval(app.rt, "game.state.connection='Joining room'", NULL, 0);
+    return 1;
 }
+
 static void network(void)
 {
-    if (!app.ws)
+    if (!app.peer)
         return;
-    bqws_update(app.ws);
-    bqws_msg *msg;
-    bool rejected = false;
-    while ((msg = bqws_recv(app.ws))) {
-        if (msg->type == BQWS_MSG_TEXT && msg->size < 24000) {
+    eng_net_event_t event;
+    char data[24000];
+    while (eng_net_poll_event(app.peer, &event, data, sizeof(data))) {
+        if (event.type == ENG_NET_EVT_DISCONNECT) {
+            hall_eval(app.rt,
+                      app.join_deadline
+                          ? "host_receive('ERROR Could not join. Check the address and server version.')"
+                          : "host_receive('DISCONNECTED')",
+                      NULL, 0);
+            disconnect_room();
+            return;
+        }
+        if (event.type == ENG_NET_EVT_CONNECT) {
+            eng_net_send(app.peer, ENG_CHAN_RELIABLE, app.hello, strlen(app.hello));
+        } else if (event.type == ENG_NET_EVT_MESSAGE && event.len < sizeof(data)) {
             char literal[35000], code[35100];
-            if (hall_string(literal, sizeof(literal), msg->data, msg->size)) {
+            if (hall_string(literal, sizeof(literal), data, event.len)) {
                 snprintf(code, sizeof(code), "host_receive(%s)", literal);
                 hall_eval(app.rt, code, NULL, 0);
-                if (msg->size >= 6 && !memcmp(msg->data, "ERROR ", 6))
-                    rejected = true;
+                if (event.len >= 6 && !memcmp(data, "ERROR ", 6)) {
+                    disconnect_room();
+                    return;
+                }
+                if (event.len >= 8 && !memcmp(data, "WELCOME ", 8))
+                    app.join_deadline = 0;
             }
         }
-        bqws_free_msg(msg);
     }
-    if (rejected) {
-        disconnect_room();
+    if (app.join_deadline) {
+        if (SDL_GetTicks() >= app.join_deadline) {
+            disconnect_room();
+            hall_eval(
+                app.rt,
+                "host_receive('ERROR Join timed out. Check the address and use the matching room server.')",
+                NULL, 0);
+        }
         return;
     }
     char outgoing[3000];
-    if (hall_eval(app.rt, "return host_drain()", outgoing, sizeof(outgoing))) {
+    if (hall_eval(app.rt, "return host_drain()", outgoing, sizeof(outgoing)))
         for (char *line = strtok(outgoing, "\n"); line; line = strtok(NULL, "\n"))
-            bqws_send_text(app.ws, line);
-    }
-    if (bqws_is_closed(app.ws)) {
-        bqws_free_socket(app.ws);
-        app.ws = NULL;
-        hall_eval(app.rt, "host_receive('DISCONNECTED')", NULL, 0);
-    }
+            eng_net_send(app.peer, ENG_CHAN_RELIABLE, line, strlen(line));
 }
 
 static void audio_frame(float dt) { hall_mix_frame(&app.mix, app.rt, app.audio, dt); }

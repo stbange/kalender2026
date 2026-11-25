@@ -35,18 +35,18 @@ Open **Feedback** in the Web menu or press **F3** in the native game to change m
 
 ## Host a room on Linux
 
-Use the **0.2.0** room service with the updated clients. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
+Use the **0.3.0** room service and clients together. This release uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
 
 1. Point a domain at the host. Allow inbound TCP on ports 80 and 443 for Caddy's HTTPS certificate and WebSocket traffic. Keep port 8787 private.
 2. Install [Caddy](https://caddyserver.com/docs/install), replace the example domain in [hosting/Caddyfile](hosting/Caddyfile) and use it as the Caddy configuration. Caddy terminates TLS and proxies WebSocket upgrades.
 3. Install [hosting/lantern-room.service](hosting/lantern-room.service) under `/etc/systemd/system/`. Run `sudo systemctl daemon-reload`, then `sudo systemctl enable --now lantern-room` and reload Caddy.
-4. In **Join friends** enter `wss://your-domain` and a room code. For native command-line launch use `./lantern --endpoint wss://your-domain --room friends`. The loose `server.json` sets optional distribution defaults. Use `--ca /path/to/ca.pem` with a private CA.
+4. In **Join friends** enter `wss://your-domain` and a room code. For native command-line launch use `./lantern --connect wss://your-domain --room friends`. The existing `--serve` and `--endpoint` flags also work alongside `--server` and `--connect`. The loose `server.json` sets optional distribution defaults. Use `--ca /path/to/ca.pem` with a private CA.
 
-Each room supports eight players. Rooms are identified by their codes and reset when everyone leaves. Native and Web clients and the service must use the same catalog revision. To roll back, deploy the previous main revision's Web archive and restart the service with its matching Linux archive.
+The service supports 48 simultaneous connections and eight players per room. Rooms are identified by their codes and reset when everyone leaves. Native and Web clients and the service must use the same catalog revision. To roll back, deploy the previous main revision's Web archive and restart the service with its matching Linux archive.
 
 ## Build
 
-Clone with submodules on main. The engine pin is `bdf4265ebae2ca6b5f80e62d2796604ed1035847`. The transport uses bq_websocket at `6c188d3f0edca38d7a8926e0d30f4c145414ba4c` with OpenSSL and a native SNI compatibility change. The Web build uses browser WebSockets. The repository follows [Ponytail](https://github.com/dietrichgebert/ponytail) and records its acceptance scenarios in [OpenSpec](openspec/changes/add-advent-hall/).
+Clone with submodules on main. The engine pin is `5efdb46710e6ca42e71c315453272a9162e40c60`. Both the hall client and the dedicated service use its WebSocket peers, events and channels. Native builds use SDL3_net. The game build adds certificate-verified OpenSSL encryption to the engine’s native stream for secure invitations. Browsers use the engine’s Emscripten WebSocket backend. The repository follows [Ponytail](https://github.com/dietrichgebert/ponytail) and records its acceptance scenarios in [OpenSpec](openspec/changes/add-advent-hall/).
 
 ```sh
 git clone --branch main --recurse-submodules https://github.com/stbange/kalender2026
@@ -57,7 +57,7 @@ python3 tools/package.py --build build --out dist/native
 dist/native/lantern
 ```
 
-Use a C11 compiler, CMake 3.20+, Ninja, Python 3, OpenSSL development libraries and SDL3 with OpenGL support. On Linux use a desktop with Mesa or another working OpenGL driver. The Linux room needs no display. Windows builds use an MSYS2 UCRT64 shell with GCC, CMake, Ninja, SDL3 and OpenSSL. The workflow packages the required DLLs and Mozilla CA certificates.
+Use a C11 compiler, CMake 3.20+, Ninja, Python 3, OpenSSL development libraries and SDL3 with OpenGL support. The engine uses an installed SDL3_net or fetches its pinned 3.2.0 release. On Linux use a desktop with Mesa or another working OpenGL driver. The Linux room needs no display. Windows builds use an MSYS2 UCRT64 shell with GCC, CMake, Ninja, SDL3 and OpenSSL. The workflow packages the required DLLs and Mozilla CA certificates.
 
 With Emscripten 4.0.15 active, build and serve the Web edition locally.
 
@@ -83,7 +83,7 @@ Use `start(run)` for the shared instance, `act(run, player)` for authoritative i
 ## Verify and publish
 
 ```sh
-python3 -m pip install gcovr websockets playwright
+python3 -m pip install gcovr websockets playwright pillow
 npm install -g @fission-ai/openspec
 openspec validate --all --strict
 cmake -S . -B build-cov -G Ninja -DHALL_COVERAGE=ON
