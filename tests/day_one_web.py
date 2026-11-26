@@ -32,6 +32,10 @@ function update(dt)
         p.x,p.z,p.yaw=g.x,g.z,0
         local a=r.actors[1]
         a.kind,a.x,a.z=1,0,-20
+        -- Keep the input timing check on one stationary target. The tour test
+        -- below exercises incoming fire with the full production encounters.
+        a.nextAttack=math.huge
+        r.actors={a}
         g.range=a
     end
 end
@@ -44,28 +48,59 @@ end
 """
 
 
-def stage(page):
+def stage(page, probe=PROBE):
     def observe(route):
         source = route.fetch()
-        route.fulfill(response=source, body=source.text() + PROBE)
+        route.fulfill(response=source, body=source.text() + probe)
 
     page.route("**/scripts/main.lua", observe)
 
 
-def stereo(browser, url):
+def tour(browser, url, options):
+    with browser.new_context(**options) as context:
+        page = context.new_page()
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        # Only position the player at the hall door. Entry, the route choice and
+        # both encounters use the shipping UI and authoritative game clock.
+        stage(page, PROBE.split("function update(dt)")[0])
+        open_game(page, url)
+        page.locator("#enter").tap()
+        page.wait_for_function("document.querySelector('#hint').textContent.includes('World Tour')")
+        page.wait_for_function(
+            "Number(document.querySelector('#bells').textContent)<5 && document.querySelector('#bellsLabel').textContent==='hearts'"
+        )
+        page.locator("#use").tap()
+        page.wait_for_function("document.querySelector('#visitors').textContent==='1/9'")
+        page.wait_for_function("document.querySelector('#hint').textContent.includes('Los Angeles')")
+        page.wait_for_function(
+            "document.querySelector('#hud').classList.contains('wounded') && Number(document.querySelector('#bells').textContent)<5",
+            timeout=60000,
+        )
+        assert not errors, errors
+
+
+def stereo(browser, url, generated=False):
     context = browser.new_context(reduced_motion="reduce", viewport={"width": 800, "height": 500})
     context.add_init_script(path=str(Path(__file__).with_name("xr_device.js")))
     page = context.new_page()
-    stage(page)
+    stage(page, PROBE.split("function update(dt)")[0] if generated else PROBE)
     open_game(page, url)
     page.locator("#enter").click()
     state = "hudText.split('|').at(-1).split(',')"
-    page.wait_for_function(state + "[2]==='1'")
+    if generated:
+        page.wait_for_function("document.querySelector('#hint').textContent.includes('World Tour')")
+        page.keyboard.down("e")
+        page.wait_for_function("document.querySelector('#visitors').textContent==='1/9'")
+        page.keyboard.up("e")
+    else:
+        page.wait_for_function(state + "[2]==='1'")
     page.evaluate("document.exitPointerLock?.()")
     page.evaluate("menu(true)")
     page.locator("#vr").click()
     page.wait_for_function("stereoFrames > 3 && testSession.active")
-    page.wait_for_function("Number("+state+"[0])>=2")
+    if not generated:
+        page.wait_for_function("Number(" + state + "[0])>=2")
     page.locator("#vr").click()
     context.close()
 
@@ -161,9 +196,12 @@ if __name__ == "__main__":
                 ),
                 args.capture,
             )
+            tour(browser, url, dict(has_touch=True, is_mobile=True, viewport={"width": 810, "height": 520}))
             stereo(browser, url)
+            stereo(browser, url, generated=True)
         with pw.webkit.launch() as browser:
             check(browser, url, pw.devices["iPhone 13"], None)
+            tour(browser, url, pw.devices["iPhone 13"])
     print(
-        "Day 1 pack, real WebGL entry, touch aiming and immediate pistol hits and held-trigger fire passed in Chromium, iPhone WebKit and emulated WebXR."
+        "Both Door 1 routes passed in Chromium and iPhone WebKit with touch controls, actual health loss and emulated WebXR stereo rendering."
     )

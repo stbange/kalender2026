@@ -359,6 +359,7 @@ function host_hud()
     if g.loadingDay then
         hint = "Loading door " .. g.loadingDay
     end
+    local current, p = r.instances[g.space], r.players[g.id]
     return table.concat({
         MissionPacks[g.space] and MissionPacks[g.space].tools and MissionPacks[g.space].tools[g.weapon]
             or Hall.weapons[g.weapon].name,
@@ -383,6 +384,8 @@ function host_hud()
         r.players[g.id] and r.players[g.id].vital or "",
         r.instances[g.space] and r.instances[g.space].progress or "",
         r.players[g.id] and r.players[g.id].armor or "",
+        current and current.pack and current.pack.stageCount and current.pack.stageCount(current) or "",
+        current and p and p.lastHurt and current.clock - p.lastHurt < 0.75 and 1 or 0,
     }, "|")
 end
 function draw()

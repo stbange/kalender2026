@@ -238,7 +238,7 @@ function H.objective(r, p, packs)
     if not run or not pack or run.done then
         return false
     end
-    if pack.act(run, p) then
+    if pack.act(run, p, r) then
         run.done = true
         local mark = 2 ^ (p.space - 1)
         for _, friend in pairs(r.players) do

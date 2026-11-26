@@ -1,5 +1,5 @@
 {
-  "revision": "tinseltown-assault-1",
+  "revision": "tinseltown-tour-1",
   "missions": [
     {
       "day": 1,
@@ -22,6 +22,18 @@
         "missions/day_01/switch.glb",
         "missions/day_01/fizz.glb",
         "missions/day_01/bullseye.glb",
+        "missions/day_01/tour-kiosk.glb",
+        "missions/day_01/tour-return.glb",
+        "missions/day_01/tour-sunset.glb",
+        "missions/day_01/tour-relay.glb",
+        "missions/day_01/tour-farm.glb",
+        "missions/day_01/tour-props.glb",
+        "missions/day_01/tour-lander.glb",
+        "missions/day_01/tour-hay.glb",
+        "missions/day_01/tour-craters.glb",
+        "missions/day_01/tour-skyline.glb",
+        "missions/day_01/tour-earthrise.glb",
+        "missions/day_01/tour-borde.glb",
         "missions/day_01/sidearm.glb",
         "missions/day_01/sidearm-action.glb",
         "missions/day_01/rack-sidearm.png",

@@ -67,7 +67,8 @@ local function boxCross(x, z, tx, tz, cx, cz, rx, rz)
         last = math.min(last, math.max(a, b))
         return first <= last
     end
-    return slab(x, tx - x, cx - rx, cx + rx) and slab(z, tz - z, cz - rz, cz + rz)
+    local hit = slab(x, tx - x, cx - rx, cx + rx) and slab(z, tz - z, cz - rz, cz + rz)
+    return hit, first, last
 end
 local function crateBlocks(x, z, tx, tz, pad)
     for _, c in ipairs(crates) do
@@ -96,7 +97,11 @@ end
 -- Fizzy concessions can be popped once per encounter for a crowd clear.
 local soda = { [2] = { -4, -22, 4 }, [6] = { 3, -80, 8 } }
 local posts = { { 0, -278 }, { -8, -266 }, { 8, -289 } }
+local Tour
 local function destination(run, observer)
+    if run.seed then
+        return Tour.destination(run)
+    end
     if run.progress == 19 then
         local x, z = M.cart(run)
         return x, z, stops[19][2]
@@ -157,10 +162,14 @@ function M.enter(run, p)
     p.x, p.z, p.tiny, p.vital = 0, checkpoint(run), false, 5
     p.armor, p.claimed, p.kickAt = 0, p.claimed or 0, -1
     p.lastHurt = nil
-    p.immunity = run.clock + 6
+    p.immunity = run.clock + (p.immunity and 2 or 0.8)
+    if run.seed then
+        Tour.arrive(run, p)
+    end
 end
 function M.exit(_, p)
     p.tiny, p.vital, p.armor, p.claimed, p.kickAt = nil, nil, nil, nil, nil
+    p.immunity, p.lastHurt, p.respawned = nil, nil, nil
 end
 local function toolsAt(k)
     if k >= 17 then
@@ -174,8 +183,11 @@ local function toolsAt(k)
     end
     return 1
 end
+function M.stageCount(run)
+    return run.seed and 9 or #stops
+end
 function M.unlocked(run)
-    return toolsAt(run.progress)
+    return run.seed and (2 + math.ceil(run.progress / 3)) or toolsAt(run.progress)
 end
 local function mob(run, kind, x, z, hp)
     run.nextActor = (run.nextActor or 0) + 1
@@ -193,6 +205,146 @@ local function mob(run, kind, x, z, hp)
         dz = 0,
     }
 end
+-- Each map is reconstructed from one server seed. Doors sit in the overlap of
+-- adjacent courts; the opening stays reachable from either side of the cover.
+Tour = {
+    names = { "Los Angeles", "Luna", "Bettinghausen" },
+    places = {
+        { "Sunset Boulevard", "Midnight Pictures", "Launch lot" },
+        { "Tranquility Base", "Relay yard", "Earthrise terminal" },
+        { "Oberdorf", "Ahse bridge", "Unterdorf" },
+    },
+}
+local function section(run)
+    return (run.progress - 1) % 3 + 1
+end
+local function leg(run)
+    return math.floor((run.progress - 1) / 3) + 1
+end
+local function layout(run)
+    local city = leg(run)
+    if run.layout and run.layout.city == city and run.layout.seed == run.seed then
+        return run.layout
+    end
+    local state = 1 + (run.seed + city * 17389) % 2147483646
+    local function roll(n)
+        state = state * 48271 % 2147483647
+        return state % n
+    end
+    local x, front = city * 100, -26
+    local map = { city = city, seed = run.seed, x = x, rooms = {}, blocks = {} }
+    local function block(x, z, w, d, height, style)
+        map.blocks[#map.blocks + 1] = { x = x, z = z, w = w, d = d, h = height, style = style }
+    end
+    local fork = 1 + roll(2)
+    for i = 1, 3 do
+        local base = city == 2 and 14 or city == 3 and 10 or 12
+        local l, r = x - base - roll(4), x + base + roll(4)
+        local back = front - (city == 2 and 20 or city == 3 and 25 or 22) - roll(6)
+        local gate = x + roll(11) - 5
+        local room = { l = l, r = r, back = back, front = front, gate = gate, spawns = {} }
+        map.rooms[i] = room
+        local mid = (back + front) / 2
+        block(l, mid, 0.6, front - back, city == 2 and 1.1 or 0.95, "wall")
+        block(r, mid, 0.6, front - back, city == 2 and 1.1 or 0.95, "wall")
+        -- Extend partitions across the widest possible adjoining court.
+        local left, right = x - 18, x + 18
+        local gaps = { { gate - 2.4, gate + 2.4 } }
+        if i == fork and (city ~= 3 or i ~= 1) then
+            local bypass = x + (gate >= x and -8 or 8)
+            gaps[#gaps + 1] = { bypass - 1.5, bypass + 1.5 }
+            table.sort(gaps, function(a, b)
+                return a[1] < b[1]
+            end)
+        end
+        local height = city == 3 and i == 1 and 0.48 or 1.55
+        for _, gap in ipairs(gaps) do
+            block((left + gap[1]) / 2, back, gap[1] - left, 0.8, height, "partition")
+            left = gap[2]
+        end
+        block((left + right) / 2, back, right - left, 0.8, height, "partition")
+        for _, side in ipairs({ -1, 1 }) do
+            block(x + side * (4 + roll(4)), mid + roll(5) - 2, 2 + roll(3), 2 + roll(3), 2.5, "cover")
+        end
+        for j = 1, 10 do
+            room.spawns[j] = {
+                x = x + ((j - 1) % 5 - 2) * 3.6 + (roll(9) - 4) * 0.16,
+                z = back + 2.0 + math.floor((j - 1) / 5) * 2.1 + roll(5) * 0.12,
+                kind = ({ 1, 2, 4 })[1 + (j + roll(3)) % 3],
+            }
+        end
+        room.spawns[1].kind, room.spawns[2].kind, room.spawns[3].kind = 1, 2, 4
+        front = back
+    end
+    run.layout = map
+    return map
+end
+local function tourBlocked(run, x, z, tx, tz, pad, y, ty)
+    for _, b in ipairs(layout(run).blocks) do
+        local hit, first, last = boxCross(x, z, tx, tz, b.x, b.z, b.w / 2 + pad, b.d / 2 + pad)
+        if hit and (not y or math.min(y + first * (ty - y), y + last * (ty - y)) <= b.h) then
+            return true
+        end
+    end
+    return false
+end
+function Tour.destination(run)
+    local room = layout(run).rooms[section(run)]
+    return room.gate + 1.45, room.back + 1.65, Tour.places[leg(run)][section(run)]
+end
+function Tour.move(run, x, z, dx, dz)
+    local map = layout(run)
+    local room = map.rooms[section(run)]
+    local nx = Hall.clamp(x + dx, map.x - 18, map.x + 18)
+    if tourBlocked(run, x, z, nx, z, 0.25) then
+        nx = x
+    end
+    local nz = Hall.clamp(z + dz, room.back + 0.8, map.rooms[1].front - 0.7)
+    if tourBlocked(run, nx, z, nx, nz, 0.25) then
+        nz = z
+    end
+    return nx, nz
+end
+function Tour.spawn(run)
+    local area = layout(run).rooms[section(run)]
+    run.actors, run.hostile, run.burst = {}, {}, nil
+    for i = 1, math.min(10, 5 + leg(run) + math.floor(run.members / 2) + section(run) - 1) do
+        local s = area.spawns[i]
+        mob(run, s.kind, s.x, s.z, s.kind == 4 and 4 or 2)
+    end
+end
+function Tour.arrive(run, p)
+    local map = layout(run)
+    local i = section(run)
+    p.x = i == 1 and map.x or map.rooms[i - 1].gate
+    p.z = map.rooms[i].front - 2
+    p.yaw = 0
+end
+function Tour.act(run, p, r)
+    if not run.seed then
+        run.seed = 1 + ((HostUTC or 0) + math.floor(run.clock * 1000) * 131 + run.id * 7919) % 2147483600
+        run.progress = 1
+    else
+        local room = layout(run).rooms[section(run)]
+        if remaining(run) > 0 or not near(p, room.gate, room.back + 1.7, 3.6) then
+            return
+        end
+        if run.progress == 9 then
+            return true
+        end
+        run.progress = run.progress + 1
+    end
+    Tour.spawn(run)
+    if section(run) == 1 then
+        for _, member in pairs(r.players) do
+            if member.space == 1 then
+                Tour.arrive(run, member)
+                member.vital, member.armor, member.immunity = 5, 1, run.clock + 0.8
+            end
+        end
+    end
+end
+
 local function spawnWave(run)
     local stop = stops[run.progress]
     local count = math.min(9, 3 + run.members + run.wave)
@@ -262,6 +414,9 @@ function M.start(run)
     mob(run, 1, 3, -4, 2)
 end
 function M.move(x, z, dx, dz, run, p)
+    if run.seed then
+        return Tour.move(run, x, z, dx, dz)
+    end
     if math.floor(run.secrets / 2) % 2 == 1 and math.abs(z + 261) < 2.8 and (x > 13.4 or x + dx > 13.4) then
         return Hall.clamp(x + dx, -13.4, 21.4), Hall.clamp(z + dz, -263.7, -258.3)
     end
@@ -330,7 +485,10 @@ local function clearEggs(run)
     end
     return true
 end
-local function visible(x, z, tx, tz)
+local function visible(run, x, z, tx, tz, y, ty)
+    if run.seed then
+        return not tourBlocked(run, x, z, tx, tz, 0, y, ty)
+    end
     if crateBlocks(x, z, tx, tz, 0) then
         return false
     end
@@ -368,6 +526,7 @@ local function damage(run, p, amount)
     p.immunity, p.lastHurt = run.clock + 1.15, run.clock
     if p.vital <= 0 then
         M.enter(run, p)
+        p.lastHurt, p.respawned = run.clock, run.clock
     end
 end
 local function pickups(run, p)
@@ -391,7 +550,7 @@ local function moveBolts(run, r, dt)
     for i = #run.hostile, 1, -1 do
         local b = run.hostile[i]
         local tx, ty, tz = b.x + b.vx * dt, b.y + b.vy * dt, b.z + b.vz * dt
-        local spent = run.clock >= b.expires or not visible(b.x, b.z, tx, tz)
+        local spent = run.clock >= b.expires or not visible(run, b.x, b.z, tx, tz, b.y, ty)
         if not spent then
             local best, hit = 2, nil
             local dx, dy, dz = tx - b.x, ty - b.y, tz - b.z
@@ -411,7 +570,7 @@ local function moveBolts(run, r, dt)
                 end
             end
             if hit then
-                damage(run, hit, 1)
+                damage(run, hit, b.heavy and 2 or 1)
                 spent = true
             end
         end
@@ -424,28 +583,43 @@ local function moveBolts(run, r, dt)
 end
 local function ranged(run, a, p, distance, dt)
     if a.ice > run.clock or a.small > run.clock or (a.impact and run.clock - a.impact.at < 0.22) then
-        a.windup = nil
+        a.windup, a.second = nil, nil
         a.nextAttack = run.clock + 0.65
         return
     end
-    local sight = distance < 26 and M.area(a.z) == M.area(p.z) and visible(a.x, a.z, p.x, p.z)
+    local sight = distance < 32
+        and (run.seed or M.area(a.z) == M.area(p.z) or math.abs(a.z - p.z) < 10)
+        and visible(run, a.x, a.z, p.x, p.z, a.kind == 2 and 2.05 or 1.2, eyeHeight(p) - 0.55)
     if a.windup then
         if run.clock >= a.windup then
             a.windup = nil
             if sight and #run.hostile < 24 then
-                local speed = a.kind == 2 and 11 or 14
+                a.firedAt = run.clock
+                local speed = a.kind == 4 and 19 or a.kind == 2 and 12 or 15
                 local y = roofHeight(a.z) + (a.kind == 2 and 2.05 or 1.2)
-                run.hostile[#run.hostile + 1] = {
-                    x = a.x,
-                    y = y,
-                    z = a.z,
-                    vx = a.ax * speed,
-                    vy = a.ay * speed,
-                    vz = a.az * speed,
-                    expires = run.clock + 2.4,
-                }
+                local fan = a.kind == 2 and 1 or a.kind == 4 and 2 or 0
+                for ray = -fan, fan do
+                    local angle = ray * (a.kind == 4 and 0.16 or 0.23)
+                    if #run.hostile < 24 then
+                        run.hostile[#run.hostile + 1] = {
+                            x = a.x,
+                            y = y,
+                            z = a.z,
+                            vx = (a.ax * math.cos(angle) - a.az * math.sin(angle)) * speed,
+                            vy = a.ay * speed,
+                            vz = (a.ax * math.sin(angle) + a.az * math.cos(angle)) * speed,
+                            expires = run.clock + 2.7,
+                            heavy = a.kind == 4,
+                        }
+                    end
+                end
+                if run.seed and a.kind == 1 and not a.second then
+                    a.windup, a.second = run.clock + 0.25, true
+                    return
+                end
             end
-            a.nextAttack = run.clock + 1.85 + (a.id % 4) * 0.23
+            a.second = nil
+            a.nextAttack = run.clock + 1.45 + (a.id % 4) * 0.23
         end
         return
     end
@@ -454,7 +628,7 @@ local function ranged(run, a, p, distance, dt)
         local dy = eyeHeight(p) - (p.tiny and 0.15 or 0.55) - roofHeight(a.z) - (a.kind == 2 and 2.05 or 1.2)
         local d = math.max(0.01, math.sqrt(distance * distance + dy * dy))
         a.ax, a.ay, a.az = (p.x - a.x) / d, dy / d, (p.z - a.z) / d
-        a.windup = run.clock + (a.kind == 2 and 0.60 or 0.42)
+        a.windup = run.clock + (a.kind == 4 and 0.90 or a.kind == 2 and 0.60 or 0.42)
         a.yaw = math.deg(math.atan2(a.ax, a.az))
         return
     end
@@ -462,17 +636,17 @@ local function ranged(run, a, p, distance, dt)
         return
     end
     local dx, dz = (p.x - a.x) / distance, (p.z - a.z) / distance
-    local advance = distance > 10 and 2.5 or distance < 4 and -1.5 or 0
+    local advance = a.kind == 4 and 0 or distance > 10 and 2.5 or distance < 4 and -1.5 or 0
     local side = a.kind == 2 and 1.9 * math.sin(run.clock * 1.2 + a.id) or 0
     local nx, nz = a.x + (advance * dx - side * dz) * dt, a.z + (advance * dz + side * dx) * dt
-    if visible(a.x, a.z, nx, nz) then
+    if visible(run, a.x, a.z, nx, nz) then
         a.x, a.z = M.move(a.x, a.z, nx - a.x, nz - a.z, run, p)
     end
 end
 function M.step(run, r, dt)
     run.clock = run.clock + dt
     moveBolts(run, r, dt)
-    local waves = shootouts[run.progress]
+    local waves = not run.seed and shootouts[run.progress]
     if waves and not run.key and run.wave < waves and remaining(run) == 0 then
         run.reinforceAt = run.reinforceAt or run.clock + 0.85
         if run.clock >= run.reinforceAt then
@@ -484,7 +658,7 @@ function M.step(run, r, dt)
         if p.space == 1 and run.progress > 15 then
             p.tiny = false
         end
-        if p.space == 1 then
+        if p.space == 1 and not run.seed then
             pickups(run, p)
         end
     end
@@ -548,7 +722,7 @@ function M.step(run, r, dt)
                 elseif
                     a.small > run.clock
                     and best < 1.8 ^ 2
-                    and (a.kind == 5 or a.kind <= 2 or a.kind == 7)
+                    and (run.seed or a.kind == 5 or a.kind <= 2 or a.kind == 7)
                 then
                     a.hp = 0
                     a.impact =
@@ -556,7 +730,7 @@ function M.step(run, r, dt)
                     if a.kind == 5 and run.progress == 13 then
                         advance(run)
                     end
-                elseif a.kind <= 2 then
+                elseif a.kind <= 2 or (run.seed and a.kind == 4) then
                     ranged(run, a, player, len, dt)
                 elseif a.kind ~= 4 and a.ice <= run.clock and best < 18 ^ 2 and best > 1.2 then
                     local speed = a.kind == 7 and 2.3 or 1.1
@@ -613,7 +787,7 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
         or k < 1
         or seq % 1 ~= 0
         or seq <= p.seq
-        or k > toolsAt(run.progress)
+        or k > M.unlocked(run)
         or p.cool > r.time
         or length < 0.1
     then
@@ -633,37 +807,41 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
         if
             a.hp > 0
             and d < distance
-            and visible(origin.x, origin.z, a.x, a.z)
+            and visible(run, origin.x, origin.z, a.x, a.z, origin.eye + origin.oy, height + roofHeight(a.z))
             and aimed(origin, a.x, a.z, dx, dy, dz, height + roofHeight(a.z), radius)
         then
             closest, distance = a, d
         end
     end
-    local can = soda[run.progress]
+    local can = not run.seed and soda[run.progress]
     if
         can
         and math.floor(run.secrets / can[3]) % 2 == 0
         and dist(origin.x, origin.z, can[1], can[2]) < distance
-        and visible(origin.x, origin.z, can[1], can[2])
+        and visible(run, origin.x, origin.z, can[1], can[2])
         and aimed(origin, can[1], can[2], dx, dy, dz, 1.16, 0.85)
     then
         run.secrets = bit.bor(run.secrets, can[3])
         for _, a in ipairs(run.actors) do
-            if a.hp > 0 and dist(a.x, a.z, can[1], can[2]) < 7 ^ 2 and visible(can[1], can[2], a.x, a.z) then
+            if
+                a.hp > 0
+                and dist(a.x, a.z, can[1], can[2]) < 7 ^ 2
+                and visible(run, can[1], can[2], a.x, a.z)
+            then
                 a.hp = 0
                 a.impact = { at = run.clock, owner = p.id, seq = seq, dx = dx, dz = dz, result = 2 }
             end
         end
         return
     end
-    if run.progress == 3 or run.progress == 19 then
+    if not run.seed and (run.progress == 3 or run.progress == 19) then
         local x, z = M.cart(run)
         if run.progress == 3 then
             x = 0
         end
         if
             dist(origin.x, origin.z, x, z) < distance
-            and visible(origin.x, origin.z, x, z)
+            and visible(run, origin.x, origin.z, x, z)
             and aimed(origin, x, z, dx, dy, dz, 1.65, 1.1)
         then
             if run.progress == 19 then
@@ -685,7 +863,11 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
             bx, bz = closest.x, closest.z
         end
         local fx, fz = floorImpact(origin, dx, dy, dz)
-        if fx and dist(origin.x, origin.z, fx, fz) < distance and visible(origin.x, origin.z, fx, fz) then
+        if
+            fx
+            and dist(origin.x, origin.z, fx, fz) < distance
+            and visible(run, origin.x, origin.z, fx, fz, origin.eye + origin.oy, roofHeight(fz))
+        then
             bx, bz, closest = fx, fz, nil
         end
         if bx then
@@ -693,19 +875,19 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
         end
     end
     for _, a in ipairs(run.actors) do
-        local hit = a == closest or (bx and dist(a.x, a.z, bx, bz) < 20 and visible(bx, bz, a.x, a.z))
+        local hit = a == closest or (bx and dist(a.x, a.z, bx, bz) < 20 and visible(run, bx, bz, a.x, a.z))
         if hit and a.hp > 0 then
             local hp = a.hp
             local frozen = a.ice > run.clock
             local result = 1 -- hit, defeat, armor, freeze, shrink
 
-            local grunt = a.kind <= 2 or a.kind == 7
+            local grunt = run.seed or a.kind <= 2 or a.kind == 7
             if a.kind == 6 and run.progress == 18 and clearEggs(run) then
                 a.hp = math.max(1, a.hp - (k == 3 and 4 or k == 5 and 2 or 1))
                 if a.hp == 1 then
                     advance(run)
                 end
-            elseif a.kind == 6 or (a.kind == 4 and k ~= 3) or (a.kind == 5 and k ~= 4) then
+            elseif a.kind == 6 or (not run.seed and a.kind == 4 and k ~= 3) or (a.kind == 5 and k ~= 4) then
                 result = 3
             elseif grunt and frozen then
                 a.hp = 0
@@ -713,7 +895,7 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
                 result, a.ice = 4, run.clock + 12
             elseif k == 4 then
                 result, a.small = 5, run.clock + 16
-            elseif a.kind == 4 and k == 3 and run.progress == 8 then
+            elseif not run.seed and a.kind == 4 and k == 3 and run.progress == 8 then
                 a.hp = 0
                 advance(run)
             elseif a.kind == 3 and not run.slide and not a.mascot then
@@ -721,7 +903,7 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
                 if a.hp <= 0 then
                     a.hp, a.x, a.z, a.ice, a.mascot = 4, -5, -55, 0, true
                 end
-            elseif a.kind <= 2 or a.kind == 7 then
+            elseif grunt then
                 a.hp = math.max(0, a.hp - (k == 3 and 4 or 1))
             else
                 result = 3
@@ -746,7 +928,7 @@ function M.kick(run, p, seq, yaw)
             a.hp > 0
             and d < best
             and (a.x - p.x) * dx + (a.z - p.z) * dz >= math.sqrt(d) * 0.45
-            and visible(p.x, p.z, a.x, a.z)
+            and visible(run, p.x, p.z, a.x, a.z)
         then
             target, best = a, d
         end
@@ -756,13 +938,16 @@ function M.kick(run, p, seq, yaw)
     end
     local a = target
     local result = 3
-    if a.kind <= 2 or a.kind == 7 then
+    if a.kind <= 2 or a.kind == 7 or (run.seed and (a.ice > run.clock or a.small > run.clock)) then
         a.hp = (a.ice > run.clock or a.small > run.clock) and 0 or math.max(0, a.hp - 1)
         result = a.hp == 0 and 2 or 1
     end
     a.impact = { at = run.clock, owner = p.id, seq = seq, dx = dx, dz = dz, result = result }
 end
-function M.act(run, p)
+function M.act(run, p, room)
+    if run.seed or (room and run.progress == 1 and near(p, 1.6, 2.7, 3.25)) then
+        return Tour.act(run, p, room)
+    end
     local k = run.progress
     if near(p, -11, -27, 2.8) then
         run.secrets = bit.bor(run.secrets, 1)
@@ -823,6 +1008,29 @@ function M.act(run, p)
     advance(run)
 end
 function M.hint(run, p)
+    local hit = p.respawned and run.clock - p.respawned < 1.4 and "Back at checkpoint.  "
+        or p.lastHurt and run.clock - p.lastHurt < 0.85 and "HIT!  "
+        or ""
+    if run.seed then
+        local map = layout(run)
+        if math.abs(p.x - map.x) < 2 and p.z > map.rooms[1].front - 1.7 then
+            return "Walk past the return sign to leave for the hall."
+        end
+        local room = map.rooms[section(run)]
+        local count = remaining(run)
+        local goal = run.done and "Ornament earned - Use to return"
+            or count > 0 and string.format("%d hostiles", count)
+            or string.format("Use the lit exit  [%dm]", math.sqrt(dist(p.x, p.z, room.gate, room.back + 1.7)))
+        return hit
+            .. Tour.names[leg(run)]
+            .. "  /  "
+            .. Tour.places[leg(run)][section(run)]
+            .. "  /  "
+            .. goal
+    end
+    if run.progress == 1 and near(p, 1.6, 2.7, 4.7) then
+        return hit .. "Use the World Tour sign for three random maps, or take the vent for Tinseltown."
+    end
     if run.done then
         return "RETURN TO SENDER  /  Ornament earned - walk through the north tunnel"
     end
@@ -844,12 +1052,20 @@ function M.hint(run, p)
     if run.progress == 12 then
         hint = hint .. " " .. math.ceil(math.max(0, 12 - run.clock + run.launch)) .. "s"
     end
-    return string.format("%s / %s  [%dm %s]", s[1], hint, distance, direction)
+    return hit .. string.format("%s / %s  [%dm %s]", s[1], hint, distance, direction)
 end
 function M.atExit(run, p)
+    if run.seed then
+        local map = layout(run)
+        return math.abs(p.x - map.x) < 1.7 and p.z > map.rooms[1].front - 1.05
+    end
     return run.done and p.z < -300 and near(p, 0, -302, 4)
 end
 function M.canReturn(run, p)
+    if run.seed then
+        local map = layout(run)
+        return run.done or near(p, map.x, map.rooms[1].front - 1, 2.2)
+    end
     return p.z > 5.9 or (run.done and near(p, 0, -302, 4))
 end
 
@@ -871,10 +1087,13 @@ function M.snapshot(rows, run, players, day)
         run.changed,
         run.key and 1 or 0
     )
+    if run.seed then
+        emit("5 %d", run.seed)
+    end
     for _, a in ipairs(run.actors) do
         local h = a.impact
         emit(
-            "1 %d %.2f %.2f %d %.2f %.2f %d %d %.1f %.2f %.3f %d %d %.2f %.2f %d %.3f",
+            "1 %d %.2f %.2f %d %.2f %.2f %d %d %.1f %.2f %.3f %d %d %.2f %.2f %d %.3f %.3f",
             a.kind,
             a.x,
             a.z,
@@ -891,26 +1110,29 @@ function M.snapshot(rows, run, players, day)
             h and h.dx or 0,
             h and h.dz or 0,
             h and h.result or 0,
-            a.windup or 0
+            a.windup or 0,
+            a.firedAt or -1
         )
     end
     if run.burst and run.clock - run.burst.at < 0.35 then
         emit("4 %.3f %.3f %.3f", run.burst.x, run.burst.z, run.burst.at)
     end
     for _, b in ipairs(run.hostile) do
-        emit("3 %.3f %.3f %.3f %.3f %.3f %.3f", b.x, b.y, b.z, b.vx, b.vy, b.vz)
+        emit("3 %.3f %.3f %.3f %.3f %.3f %.3f %d", b.x, b.y, b.z, b.vx, b.vy, b.vz, b.heavy and 1 or 0)
     end
     for id, p in pairs(players) do
         if p.space == day then
             emit(
-                "2 %d %d %d %d %d %d %.3f",
+                "2 %d %d %d %d %d %d %.3f %.3f %.3f",
                 id,
                 p.tiny and 1 or 0,
                 p.vital,
                 p.seq,
                 p.armor,
                 p.claimed,
-                p.kickAt
+                p.kickAt,
+                p.lastHurt or -1,
+                p.respawned or -1
             )
         end
     end
@@ -934,7 +1156,7 @@ function M.read(r, w)
         run.actors, run.hostile, run.key = {}, {}, w[13] == 1
     elseif
         w[3] == 1
-        and #w == 20
+        and #w == 21
         and run.actors
         and #run.actors < 32
         and w[4] % 1 == 0
@@ -953,18 +1175,31 @@ function M.read(r, w)
             yaw = w[12],
             stride = w[13],
             windup = w[20] > 0 and w[20] or nil,
+            firedAt = w[21] >= 0 and w[21] or nil,
         }
         if w[19] > 0 and w[19] <= 5 then
             a.impact = { at = w[14], owner = w[15], seq = w[16], dx = w[17], dz = w[18], result = w[19] }
         end
         run.actors[#run.actors + 1] = a
+    elseif
+        w[3] == 5
+        and #w == 4
+        and w[4] >= 1
+        and w[4] < 2147483647
+        and w[4] % 1 == 0
+        and run.progress <= 9
+    then
+        run.seed = w[4]
     elseif w[3] == 4 and #w == 6 then
         run.burst = { x = w[4], z = w[5], at = w[6] }
-    elseif w[3] == 3 and #w == 9 and run.hostile and #run.hostile < 24 then
-        run.hostile[#run.hostile + 1] = { x = w[4], y = w[5], z = w[6], vx = w[7], vy = w[8], vz = w[9] }
-    elseif w[3] == 2 and #w == 10 and r.players[w[4]] then
+    elseif w[3] == 3 and #w == 10 and run.hostile and #run.hostile < 24 then
+        run.hostile[#run.hostile + 1] =
+            { x = w[4], y = w[5], z = w[6], vx = w[7], vy = w[8], vz = w[9], heavy = w[10] == 1 }
+    elseif w[3] == 2 and #w == 12 and r.players[w[4]] then
         local p = r.players[w[4]]
         p.tiny, p.vital, p.seq, p.armor, p.claimed, p.kickAt = w[5] == 1, w[6], w[7], w[8], w[9], w[10]
+        p.lastHurt = w[11] >= 0 and w[11] or nil
+        p.respawned = w[12] >= 0 and w[12] or nil
     else
         return false
     end
@@ -993,11 +1228,126 @@ local function place(name, model, x, y, z, size)
     eng.scene.set_scale(e, size, size, size)
     return e
 end
+-- The generator supplies geometry for movement, enemy sight, and this pool.
+-- Only the current map is dressed, and its entities are reused on a replay.
+local tourScene = { pool = {} }
+local tourColors = {
+    { { 0.17, 0.16, 0.22 }, { 0.45, 0.28, 0.32 }, { 0.89, 0.28, 0.42 }, { 0.48, 0.36, 0.23 } },
+    { { 0.38, 0.40, 0.46 }, { 0.35, 0.37, 0.44 }, { 0.32, 0.70, 0.84 }, { 0.57, 0.57, 0.52 } },
+    { { 0.35, 0.45, 0.22 }, { 0.24, 0.36, 0.17 }, { 0.82, 0.68, 0.28 }, { 0.52, 0.36, 0.19 } },
+}
+local function dressTour(run)
+    local map = layout(run)
+    local city = map.city
+    if tourScene.seed == run.seed and tourScene.city == city then
+        return
+    end
+    tourScene.seed, tourScene.city = run.seed, city
+    local used = 0
+    local colors = tourColors[city]
+    local function mesh(model, x, y, z, w, h, d, material, yaw)
+        used = used + 1
+        local e = tourScene.pool[used]
+        if not e then
+            e = eng.scene.spawn("World Tour scenery")
+            tourScene.pool[used] = e
+            eng.scene.set_pocket(e, pocket)
+        end
+        eng.scene.set_mesh(e, model, material)
+        eng.scene.set_pos(e, x, y, z)
+        eng.scene.set_rot_deg(e, 0, yaw or 0, 0)
+        eng.scene.set_scale(e, w, h, d)
+    end
+    local function box(x, y, z, w, h, d, color, glow)
+        mesh(World.box, x, y, z, w, h, d, { color = color, emissive = glow or 0.04 })
+    end
+    local function landmark(name, x, y, z, size, yaw)
+        mesh(
+            art[name],
+            x,
+            y,
+            z,
+            size,
+            size,
+            size,
+            { tex = World.palette, metallic = -4, roughness = 0.85 },
+            yaw
+        )
+    end
+    local buildings = { "tour-sunset", "tour-relay", "tour-farm" }
+    local horizon = { "tour-skyline", "tour-earthrise", "tour-borde" }
+    for i, room in ipairs(map.rooms) do
+        local mid = (room.back + room.front) / 2
+        local width = room.r - room.l
+        box((room.l + room.r) / 2, -0.19, mid, width, 0.38, room.front - room.back, colors[1])
+        for _, side in ipairs({ -1, 1 }) do
+            local edge = side == -1 and room.l or room.r
+            landmark(buildings[city], edge + side * 4.6, 0, room.back + 3.2, 1.25, -side * 48)
+        end
+        if city == 2 then
+            landmark("tour-craters", map.x, 0, mid, 1, 0)
+        end
+        for j = 1, 5 do
+            local z = room.front - j * (room.front - room.back) / 6
+            if city == 1 then
+                box(map.x, 0.015, z, 0.17, 0.03, 1.7, colors[3])
+            elseif city == 2 then
+                for _, side in ipairs({ -1, 1 }) do
+                    box(map.x + side * 8.8, 0.04, z, 0.78, 0.08, 0.22, colors[3], 0.4)
+                end
+            else
+                box(map.x, -0.04, z, 4, 0.11, (room.front - room.back) / 6 + 0.02, colors[4])
+            end
+        end
+        if city == 3 and i == 1 then
+            box(map.x, 0.04, room.back, 30, 0.085, 3.4, { 0.12, 0.44, 0.62 })
+            for n = -4, 4 do
+                box(room.gate, 0.105, room.back + n * 0.42, 4.8, 0.13, 0.38, colors[4])
+            end
+            for _, side in ipairs({ -1, 1 }) do
+                box(room.gate + 2.28 * side, 0.82, room.back, 0.12, 0.13, 3.9, colors[4])
+                for n = -1, 1 do
+                    box(room.gate + 2.28 * side, 0.44, room.back + n * 1.8, 0.18, 0.88, 0.18, colors[4])
+                end
+            end
+        end
+        landmark("switch", room.gate + 1.45, 0.12, room.back + 1.65, 0.85, 0)
+    end
+    landmark("tour-return", map.x + 1.7, 0, map.rooms[1].front - 0.25, 0.8, 180)
+    for _, b in ipairs(map.blocks) do
+        local cover = b.style == "cover"
+        local color = cover and colors[4] or colors[2]
+        if cover then
+            local prop = ({ "tour-props", "tour-lander", "tour-hay" })[city]
+            mesh(art[prop], b.x, 0, b.z, b.w / 3, b.h / 2.5, b.d / 3, { tex = World.palette, metallic = -4 })
+        else
+            box(b.x, b.h / 2, b.z, b.w, b.h, b.d, color)
+            box(b.x, b.h - 0.17, b.z, b.w + 0.04, 0.19, b.d + 0.04, colors[3], 0.12)
+        end
+    end
+    landmark(horizon[city], map.x, 0, map.rooms[3].back - 9, 1.1, 0)
+    for i = used + 1, #tourScene.pool do
+        eng.scene.set_pos(tourScene.pool[i], 0, -100, 0)
+    end
+end
+
 function M.build(space, pedestal)
     pocket = space
     crewTexture = eng.asset.load_texture("missions/day_01/crew-hide.png", true)
     eng.scene.set_pos(pedestal, 0, -50, 0)
     for _, name in ipairs({
+        "tour-return",
+        "tour-kiosk",
+        "tour-sunset",
+        "tour-relay",
+        "tour-farm",
+        "tour-skyline",
+        "tour-earthrise",
+        "tour-borde",
+        "tour-hay",
+        "tour-lander",
+        "tour-props",
+        "tour-craters",
         "cinema",
         "diner",
         "silos",
@@ -1038,6 +1388,7 @@ function M.build(space, pedestal)
     for i, name in ipairs(gunArt) do
         bolts[i] = eng.asset.load_texture("missions/day_01/shot-" .. name .. ".png", true)
     end
+    nodes.tourKiosk = place("World Tour departures", "tour-kiosk", 1.6, roofHeight(2.7), 2.7, 0.87)
     local poster = place("Now showing", "poster", 0, 0, 0, 1)
     eng.scene.set_mesh(
         poster,
@@ -1167,6 +1518,25 @@ local function animateActor(g, run, a, i, t, motion)
         eng.scene.set_pocket(slot.node, pocket)
         actors[i] = slot
     end
+    if
+        a.firedAt
+        and a.firedAt >= g.feedback.dayJoined
+        and t - a.firedAt < 0.3
+        and (slot.shotId ~= a.id or slot.shotAt ~= a.firedAt)
+    then
+        slot.shotId, slot.shotAt = a.id, a.firedAt
+        Feedback.sound(
+            g,
+            a.kind == 4 and "d1-launch" or "d1-slide",
+            0.53,
+            a.kind == 2 and 1.4 or 0.78,
+            2,
+            a.x,
+            1.4,
+            a.z,
+            32
+        )
+    end
     local h = a.impact
     local age = h and math.max(0, t - h.at) or 100
     local hit = math.max(0, 1 - age / 0.24)
@@ -1222,15 +1592,18 @@ local function animateActor(g, run, a, i, t, motion)
     local gait = frozen and 0 or math.sin(stride) * motion
     local hover = frozen and 0 or math.sin(t * 4 + i) * motion
     local y = roofHeight(a.z) + (a.kind == 2 and 0.85 + hover * 0.16 or 0.09 * math.abs(gait))
-    local fallen = a.hp <= 0 and math.min(1, age / 0.32) or 0
+    local fallen = a.hp <= 0 and math.min(1, age / (a.kind == 2 and 0.95 or 0.68)) or 0
+    local crash = fallen * fallen
+    local tumble = math.sin(fallen * math.pi) * motion
     local recoil = hit * hit * motion
     local dx, dz = h and h.dx or 0, h and h.dz or 0
     local visible = a.kind ~= 7 and (a.hp > 0 or fallen < 1)
     eng.scene.set_pos(
         slot.node,
-        a.x + dx * 0.32 * recoil,
-        visible and y - fallen * 0.22 or -80,
-        a.z + dz * 0.32 * recoil
+        a.x + dx * (0.32 * recoil + fallen * 0.75 * motion),
+        visible and y - crash * (a.kind == 2 and 0.85 or 0.18) + tumble * (a.kind == 2 and 0.55 or 0.12)
+            or -80,
+        a.z + dz * (0.32 * recoil + fallen * 0.75 * motion)
     )
     local windup = a.kind == 6 and run.progress == 18 and run.charge - t > 3.8
     local facing = math.rad(a.yaw or 0)
@@ -1238,9 +1611,13 @@ local function animateActor(g, run, a, i, t, motion)
     local side = dx * math.cos(facing) - dz * math.sin(facing)
     eng.scene.set_rot_deg(
         slot.node,
-        (windup and -18 or 0) * motion + 19 * forward * recoil + fallen * 65 * motion,
-        a.yaw or 0,
-        (a.kind == 3 and 11 or 4) * gait - side * 19 * recoil
+        (windup and -18 or a.windup and a.kind == 4 and 11 or 0) * motion
+            + 19 * forward * recoil
+            + fallen * 65 * motion,
+        (a.yaw or 0) + (a.kind == 2 and fallen * 245 * motion or 0),
+        (a.kind == 4 and crash * 78 or a.kind == 2 and tumble * 75 or 0) * motion
+            + (a.kind == 3 and 11 or 4) * gait
+            - side * 19 * recoil
     )
     local size = (a.small > t and 0.27 or 1) * (1 - fallen * 0.65)
     eng.scene.set_scale(slot.node, size, size * (1 - 0.09 * recoil), size)
@@ -1256,6 +1633,9 @@ local function animateActor(g, run, a, i, t, motion)
                 roll = swing * (leg and 18 or -24)
             elseif a.kind == 4 then
                 angle = leg and 0 or -12 - 32 * recoil + hover * 4
+            end
+            if fallen > 0 then
+                angle = angle + (leg and -42 or -85) * tumble
             end
             if a.windup and j == 4 then
                 angle = -75
@@ -1317,6 +1697,10 @@ function M.render(g, dt)
     local s = stops[phase]
     local cx, cz = M.cart(run)
     local motion = g.feedback.prefs[1] / 100
+    set(nodes.tourKiosk, 1.6, (not run.seed and phase == 1) and roofHeight(2.7) or -80, 2.7)
+    if run.seed then
+        dressTour(run)
+    end
     set(nodes.cart, cx, (phase == 3 or phase == 19) and 0 or -80, cz)
     local post = posts[run.drive]
     if phase == 18 then
@@ -1378,10 +1762,18 @@ function M.render(g, dt)
         if g.dukeClaimed ~= p.claimed or (run.key and not g.dukeKey) then
             Feedback.sound(g, "bell", 0.48, 1.4, 2)
         end
+        if p.lastHurt and p.lastHurt ~= g.tourHurt and t - p.lastHurt < 0.9 then
+            g.flavor = (p.respawned == p.lastHurt and "Back at checkpoint" or "Hit!")
+                .. "  /  "
+                .. p.vital
+                .. " hearts"
+            g.noteUntil = g.clock + 0.75
+        end
         if p.kickAt ~= g.dukeKick and kickAge < 0.32 and p.kickAt >= 0 then
             Feedback.sound(g, "throw", 0.55, 0.85, 2)
         end
     end
+    g.tourHurt = p.lastHurt
     g.dukeRun, g.dukeHealth, g.dukeClaimed, g.dukeKey, g.dukeKick =
         run.id, p.vital + p.armor, p.claimed, run.key, p.kickAt
     local tx, tz = destination(run, p)
@@ -1496,19 +1888,23 @@ function M.sprites(g)
     local fraction = Hall.clamp(g.clock - (g.sampleAt or g.clock), 0, 0.08)
     for _, b in ipairs(run.hostile) do
         local x, y, z = b.x + fraction * b.vx, b.y + fraction * b.vy, b.z + fraction * b.vz
-        eng.render.draw_sprite(x, y, z, 0.36, 0.36, bolts[3])
+        local width = b.heavy and 0.72 or 0.46
+        eng.render.draw_sprite(x, y, z, width, width, bolts[b.heavy and 4 or 3])
         eng.render.draw_sprite(x - 0.022 * b.vx, y - 0.022 * b.vy, z - 0.022 * b.vz, 0.18, 0.18, bolts[5])
     end
     for _, a in ipairs(run.actors) do
-        if a.hp > 0 and a.windup and a.windup > run.clock and a.ice <= run.clock then
+        local charge = a.windup and a.windup > run.clock
+        local muzzle = a.firedAt and run.clock - a.firedAt < 0.13
+        if a.hp > 0 and (charge or muzzle) and a.ice <= run.clock then
+            local diameter = muzzle and 0.63 or a.kind == 4 and 0.51 or 0.34
             local angle = math.rad(a.yaw)
             eng.render.draw_sprite(
                 a.x + 0.62 * math.sin(angle) + 0.4 * math.cos(angle),
                 roofHeight(a.z) + (a.kind == 2 and 2.05 or 1.2),
                 a.z + 0.62 * math.cos(angle) - 0.4 * math.sin(angle),
-                0.34,
-                0.34,
-                bolts[1]
+                diameter,
+                diameter,
+                bolts[a.kind == 4 and 4 or 1]
             )
         end
     end
@@ -1525,7 +1921,14 @@ function M.sprites(g)
             [19] = "aim",
         })[run.progress]
         or "use"
-    eng.render.draw_sprite(tx, 3.1, tz, 2.25, 0.60, labels[cue])
+    eng.render.draw_sprite(
+        tx,
+        3.1,
+        tz,
+        2.25,
+        0.60,
+        labels[run.seed and (remaining(run) > 0 and "clear" or "use") or cue]
+    )
     for i, a in ipairs(run.actors) do
         if a.kind == 7 and a.hp > 0 then
             local motion = g.feedback.prefs[1] / 100

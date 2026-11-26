@@ -233,7 +233,7 @@ function bindButton(id, press) {
   b.onpointerup = b.onpointercancel = b.onlostpointercapture = (e) => press(e.pointerId, false);
 }
 bindButton("fire", pointerFire);
-bindButton("use", (_, down) => action("interact", down));
+$("use").onclick = () => tap("interact");
 let moving = null,
   looking = null,
   px = 0,
@@ -367,13 +367,15 @@ function updateHUD(text) {
     hearts,
     stage,
     armor,
+    stageCount,
+    hurt,
   ] = text.split("|");
   if (lastOrnaments !== undefined && lastOrnaments !== ornaments) persist();
   lastOrnaments = ornaments;
   $("weaponName").textContent = weapon;
   $("bells").textContent = missionTools ? hearts : bells;
   $("bellsLabel").textContent = missionTools ? "hearts" : "bells";
-  $("visitors").textContent = missionTools ? stage + "/20" : visitors;
+  $("visitors").textContent = missionTools ? stage + "/" + (stageCount || 20) : visitors;
   $("visitorsLabel").textContent = missionTools ? "stage" : "visitors";
   $("days").textContent = days;
   $("connection").textContent = connection + (connection === "Live room" ? " · " + players + "/8" : "");
@@ -397,6 +399,7 @@ function updateHUD(text) {
     .join(" · ");
   if ($("feedbackText").textContent !== notice) $("feedbackText").textContent = notice;
   const inDispatch = space === "1" && !!missionTools;
+  $("hud").classList.toggle("wounded", inDispatch && hurt === "1");
   $("armorStat").hidden = !inDispatch;
   $("armor").textContent = armor || "0";
   $("practice").hidden = !inDispatch && Number(visitors) > 0;

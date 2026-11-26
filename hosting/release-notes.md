@@ -1,9 +1,9 @@
-The Lantern Hall 0.7.0 brings faster strafing, ranged patrols and freight cover to Day 1. Dodge after the muzzle lights up, freeze and kick a guard, or fire a rocket at the floor between enemies. Medkits and armor are personal pickups. The two red access cards let the whole crew skip reinforcements.
+Door 1 now has a second route. Use the World Tour sign on the opening rooftop to play Los Angeles, Luna and Bettinghausen in order. The rooftop vent still leads to Last Launch from Tinseltown.
 
-Quick kick uses R on desktop, Kick on touchscreens and B on Quest.
+A fresh tour generates three maps with nine firefights. Movie props, lunar landers and haystacks provide cover. Watch for aimed double shots, airborne fan volleys and charged heavy salvos. Listen for incoming fire and watch your hearts and armor. Losing your last heart returns you to the current sector.
 
-Room hosts should install the matching Linux service and restart it. This release uses the mission revision `tinseltown-assault-1`.
+In a live room, the first route selection applies to the crew. Late arrivals share the map and checkpoint. Install the matching 0.8.0 Linux room service for the new mission catalog revision.
 
-[Play on GitHub Pages](https://stbange.github.io/kalender2026/)
+[Play Kalender 2026](https://stbange.github.io/kalender2026/)
 
 Original code uses MIT. Original art and audio use CC BY 4.0.

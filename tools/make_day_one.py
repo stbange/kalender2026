@@ -7,6 +7,7 @@ from PIL import Image, ImageDraw, ImageFont
 from make_dispatch_crew import build_crew
 from make_dispatch_sets import floor_tiles, sector_skins, weapons
 from voxel_model import Model
+from make_world_tour import tour_art
 
 ROOT = Path(__file__).resolve().parents[1] / "games/kalender2026/missions"
 ART = ROOT / "day_01"
@@ -425,6 +426,7 @@ def props():
     ):
         m.box(0, 0, depth, width, width, 0.1, color)
     save(m, "bullseye")
+    tour_art(save,sign)
     weapons(ART, files, save)
     sector_skins(ART, files, save)
     floor_tiles(ART, files, save)
@@ -585,7 +587,7 @@ if __name__ == "__main__":
     for build in (cinema, diner, silos, flight, luna, bowl, props):
         build()
     catalog = {
-        "revision": "tinseltown-assault-1",
+        "revision": "tinseltown-tour-1",
         "missions": [
             {
                 "day": 1,

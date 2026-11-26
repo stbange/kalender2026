@@ -180,7 +180,7 @@ class HallConnection(ClientConnection):
         return message
 
 
-def hello(url, room="friends", revision="tinseltown-assault-1", **kwargs):
+def hello(url, room="friends", revision="tinseltown-tour-1", **kwargs):
     ws = connect(
         url,
         proxy=None,
@@ -218,6 +218,9 @@ def snapshot(ws, predicate, timeout=8):
             latest=0,
             wave_number=0,
             mission_players={},
+            tour_seed=None,
+            health={},
+            bolts=0,
             kicks={},
             actors=[],
         )
@@ -271,6 +274,11 @@ def snapshot(ws, predicate, timeout=8):
             elif row[:3] == ["D", "1", "2"]:
                 state["mission_players"][int(row[3])] = int(row[6])
                 state["kicks"][int(row[3])] = float(row[9])
+                state["health"][int(row[3])] = int(row[5])
+            elif row[:3] == ["D", "1", "5"]:
+                state["tour_seed"] = int(row[3])
+            elif row[:3] == ["D", "1", "3"]:
+                state["bolts"] += 1
             elif row[0] == "T":
                 state["targets"][int(row[1])] = float(row[2])
             elif row[0] == "M":
@@ -296,7 +304,7 @@ def public_room(binary, root):
         url = f"ws://127.0.0.1:{port}"
         clients = []
 
-        def join(room="friends", revision="tinseltown-assault-1"):
+        def join(room="friends", revision="tinseltown-tour-1"):
             ws, answer = hello(url, room, revision)
             stack.callback(ws.close)
             return ws, answer
@@ -328,7 +336,7 @@ def public_room(binary, root):
         joined = snapshot(new, lambda s: s["hits"] == 1)
         assert joined["wave"] == 1 and joined["latest"] == bell["id"]
         assert joined["seats"][8] != s["seats"][8]
-        new.send("HELLO3 tinseltown-assault-1 friends")
+        new.send("HELLO3 tinseltown-tour-1 friends")
         assert len(snapshot(new, lambda s: True)["players"]) == 8
         with tempfile.TemporaryDirectory() as tmp, tls_proxy(port, tmp) as (secure, cert, names):
             witness, answer = join("native")
@@ -497,6 +505,28 @@ def last_launch(binary, root):
     print("Eight real engine WebSocket clients shared the production mission and independent pistol shots.")
 
 
+def world_tour(binary, root):
+    with service(binary, root) as port, contextlib.ExitStack() as stack:
+        group = []
+        for i in range(8):
+            ws, answer = hello(f"ws://127.0.0.1:{port}", "tour")
+            stack.callback(ws.close)
+            assert answer == f"WELCOME {i+1}"
+            group.append(ws)
+        walk(group, (0,17), (-23,17.5))
+        for ws in group[:7]:
+            ws.send("ENTER 1")
+        snapshot(group[0], lambda s: len(s["mission_players"]) == 7)
+        group[0].send("USE")
+        first = snapshot(group[0], lambda s: bool(s["tour_seed"]))
+        group[7].send("ENTER 1")
+        late = snapshot(group[7], lambda s: len(s["mission_players"]) == 8)
+        assert late["tour_seed"] == first["tour_seed"] and late["players"][8]["x"] == 100
+        snapshot(group[1], lambda s: s["bolts"] > 0)
+        snapshot(group[7], lambda s: min(s["health"].values()) < 5, timeout=12)
+    print("Eight tour clients shared a seed, incoming bolts and visible health loss.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("binary", type=Path)
@@ -506,3 +536,4 @@ if __name__ == "__main__":
     coop(args.binary.resolve(), args.root.resolve())
     capacity(args.binary.resolve(), args.root.resolve())
     last_launch(args.binary.resolve(), args.root.resolve())
+    world_tour(args.binary.resolve(), args.root.resolve())
