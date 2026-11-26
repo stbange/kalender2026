@@ -416,14 +416,87 @@ function updateHUD(text) {
     b.classList.toggle("selected", b.dataset.weapon === number);
   }
 }
-async function fileIntoFS(path) {
-  const response = await fetch(path);
-  if (!response.ok) throw Error("Could not load " + path);
-  const data = new Uint8Array(await response.arrayBuffer());
+// Keep URLs relative to the served game even when installed under a Pages subpath.
+async function gameResponse(path, options = {}) {
+  const url = new URL(path, location.href);
+  if (url.origin !== location.origin || !["http:", "https:"].includes(url.protocol))
+    throw Error("Invalid game asset URL: " + path);
+  const response = await fetch(url, { mode: "same-origin", ...options });
+  if (!response.ok) throw Error(path + " (HTTP " + response.status + ")");
+  return response;
+}
+
+function writeGameFile(path, data) {
+  if (path.endsWith(".glb")) {
+    const header = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    if (data.length < 12 || header.getUint32(0) !== 0x676c5446 || header.getUint32(8, true) !== data.length)
+      throw Error(path + " (incomplete or invalid GLB)");
+  }
   const slash = path.lastIndexOf("/");
   if (slash >= 0) Module.FS.mkdirTree("/" + path.slice(0, slash));
   Module.FS.writeFile("/" + path, data);
 }
+
+async function loadFiles(paths, cache = "default") {
+  const missing = new Map();
+  let next = 0;
+  async function worker() {
+    while (next < paths.length) {
+      const path = paths[next++];
+      try {
+        const response = await gameResponse(path, { cache });
+        writeGameFile(path, new Uint8Array(await response.arrayBuffer()));
+      } catch (error) {
+        missing.set(path, error);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(6, paths.length) }, worker));
+  return missing;
+}
+
+async function loadHall(manifest) {
+  let missing = await loadFiles(manifest.files);
+  if (!missing.size) return;
+  missing = await loadFiles([...missing.keys()], "reload");
+  if (!missing.size) return;
+  const recovery = manifest.recovery;
+  const [path, firstError] = missing.entries().next().value;
+  if (!recovery) throw Error("Could not load " + path + ": " + firstError.message);
+  // Pages supports byte ranges. A static host that ignores Range sends the full file.
+  const indices = manifest.files.map((name, i) => (missing.has(name) ? i : -1)).filter((i) => i >= 0);
+  const { offsets, file } = recovery;
+  const start = offsets[indices[0]];
+  const end = offsets[indices.at(-1) + 1];
+  if (start === end) {
+    for (const i of indices) writeGameFile(manifest.files[i], new Uint8Array(0));
+    return;
+  }
+  try {
+    const response = await gameResponse(file, { headers: { Range: "bytes=" + start + "-" + (end - 1) } });
+    const data = new Uint8Array(await response.arrayBuffer());
+    const partial = response.status === 206;
+    if (
+      data.length !== (partial ? end - start : offsets.at(-1)) ||
+      (partial && response.headers.get("Content-Range") !== `bytes ${start}-${end - 1}/${offsets.at(-1)}`)
+    )
+      throw Error("Incomplete startup recovery download");
+    const base = partial ? start : 0;
+    for (const i of indices)
+      writeGameFile(manifest.files[i], data.subarray(offsets[i] - base, offsets[i + 1] - base));
+  } catch (error) {
+    throw Error("Could not load " + path + ": " + firstError.message + ". Recovery: " + error.message);
+  }
+}
+
+async function readManifest() {
+  try {
+    return await (await gameResponse("manifest.json", { cache: "no-cache" })).json();
+  } catch {
+    return (await gameResponse("manifest.json", { cache: "reload" })).json();
+  }
+}
+
 var Module = {
   canvas,
   noInitialRun: true,
@@ -431,20 +504,15 @@ var Module = {
   printErr: (msg) => console.warn(msg),
   onRuntimeInitialized: async () => {
     try {
-      const resp = await fetch("manifest.json", { cache: "no-cache" });
-      if (!resp.ok) throw Error("Could not load the game manifest");
-      const manifest = await resp.json();
+      const manifest = await readManifest();
       Module.fetchHallPack = async (day) => {
-        try {
-          await Promise.all((manifest.missions[day] || []).map(fileIntoFS));
-          Module._hall_pack_ready(day, 1);
-        } catch (e) {
-          console.warn(e);
-          Module._hall_pack_ready(day, 0);
-        }
+        const missing = await loadFiles(manifest.missions[day] || []);
+        if (missing.size) console.warn(missing.values().next().value);
+        Module._hall_pack_ready(day, Number(missing.size === 0));
       };
-      await Promise.all(manifest.files.map(fileIntoFS));
-      await Promise.allSettled(manifest.entries.map(fileIntoFS));
+      await loadHall(manifest);
+      const missingEntries = await loadFiles(manifest.entries);
+      if (missingEntries.size) await loadFiles([...missingEntries.keys()], "reload");
       Module.FS.mkdirTree("/profile");
       try {
         Module.FS.mount(Module.IDBFS, {}, "/profile");
@@ -483,6 +551,9 @@ var Module = {
       if (window.installHallXR) window.installHallXR();
     } catch (e) {
       $("loading").textContent = "The hall could not open. " + (e.message || e);
+      $("enter").hidden = true;
+      $("retryLoad").hidden = false;
+      $("retryLoad").onclick = () => location.reload();
       console.error(e);
     }
   },

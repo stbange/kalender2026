@@ -1,6 +1,7 @@
 """Stage an editable client or server distribution. Use the same content paths on Web and native."""
 
 import argparse
+import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -12,6 +13,19 @@ GAME = Path("games/kalender2026")
 def copy(src, dst):
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
+
+
+def web_recovery(out, paths):
+    """An independently addressable copy of the startup files, in manifest order."""
+    data = bytearray()
+    offsets = [0]
+    for path in paths:
+        data.extend((out / path).read_bytes())
+        offsets.append(len(data))
+    digest = hashlib.sha256(data).hexdigest()
+    name = f"hall-startup-{digest[:20]}.bin"
+    (out / name).write_bytes(data)
+    return {"file": name, "offsets": offsets}
 
 
 def package(build, out, web, fixture=None, server=False):
@@ -87,10 +101,15 @@ def package(build, out, web, fixture=None, server=False):
         for file in ("lantern.js", "lantern.wasm"):
             copy(build / file, out / file)
         entries = [(GAME / m["script"]).as_posix() for m in catalog["missions"]]
+        files = sorted(set(bootstrap) - deferred - set(entries))
+        index = out / "index.html"
+        loader_version = hashlib.sha256((out / "hall.js").read_bytes()).hexdigest()[:16]
+        index.write_text(index.read_text().replace('src="hall.js"', f'src="hall.js?v={loader_version}"'))
         (out / "manifest.json").write_text(
             json.dumps(
                 {
-                    "files": sorted(set(bootstrap) - deferred - set(entries)),
+                    "files": files,
+                    "recovery": web_recovery(out, files),
                     "entries": entries,
                     "missions": groups,
                 },

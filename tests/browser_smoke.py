@@ -3,6 +3,8 @@
 import argparse
 import contextlib
 import functools
+import hashlib
+import json
 import http.server
 import os
 from pathlib import Path
@@ -45,6 +47,80 @@ def open_game(page, url):
     page.wait_for_function("document.getElementById('enter').disabled === false", timeout=60000)
 
 
+def check_startup_recovery(browser, url, site, scenarios=("transient", "range", "full", "retry")):
+    model = "games/kalender2026/assets/gingerbread.glb"
+    digest = hashlib.sha256((site / model).read_bytes()).hexdigest()
+    manifest = json.loads((site / "manifest.json").read_text())
+    recovery = manifest["recovery"]
+    packet = (site / recovery["file"]).read_bytes()
+    index = manifest["files"].index(model)
+    start, end = recovery["offsets"][index : index + 2]
+    for scenario in scenarios:
+        page = browser.new_page()
+        attempts, ranges = [], []
+        if scenario == "transient":
+            page.add_init_script("""(() => {
+                const fetchFile = window.fetch;
+                window.assetPeak = 0;
+                let active = 0;
+                window.fetch = async (...args) => {
+                    if (!String(args[0]).includes('/games/kalender2026/assets/')) return fetchFile(...args);
+                    window.assetPeak = Math.max(window.assetPeak, ++active);
+                    try { return await fetchFile(...args); } finally { active--; }
+                };
+            })()""")
+
+        def loose(route):
+            attempts.append(route.request.url)
+            if scenario == "transient" and len(attempts) > 1:
+                route.continue_()
+            elif scenario == "full":
+                # Some static hosts return their HTML error page with status 200.
+                route.fulfill(status=200, content_type="text/html", body="<html>Not found</html>")
+            else:
+                route.fulfill(status=503 if scenario == "transient" else 404, body="")
+
+        def bundle(route):
+            ranges.append(route.request.headers.get("range"))
+            if scenario == "retry":
+                route.fulfill(status=503, body="")
+            elif scenario == "range":
+                route.fulfill(
+                    status=206,
+                    headers={"Content-Range": f"bytes {start}-{end - 1}/{len(packet)}"},
+                    body=packet[start:end],
+                )
+            else:
+                route.fulfill(status=200, body=packet)
+
+        page.route("**/" + model, loose)
+        page.route("**/" + recovery["file"], bundle)
+        if scenario == "retry":
+            page.goto(url, wait_until="domcontentloaded")
+            page.locator("#retryLoad").wait_for()
+            message = page.locator("#loading").text_content()
+            assert model in message and "HTTP 404" in message and "HTTP 503" in message
+            page.unroute("**/" + model)
+            page.locator("#retryLoad").click()
+            page.wait_for_function("!document.getElementById('enter').disabled")
+        else:
+            open_game(page, url)
+        if scenario == "transient":
+            assert 0 < page.evaluate("window.assetPeak") <= 6
+        assert len(attempts) == 2, (scenario, attempts)
+        assert ranges == ([] if scenario == "transient" else [f"bytes={start}-{end - 1}"]), (scenario, ranges)
+        got = page.evaluate(
+            """async path => Array.from(new Uint8Array(await crypto.subtle.digest(
+            'SHA-256', Module.FS.readFile('/' + path)))).map(b=>b.toString(16).padStart(2,'0')).join('')""",
+            model,
+        )
+        assert got == digest
+        page.locator("#enter").click()
+        page.wait_for_function("document.body.dataset.mode === 'play'")
+        page.close()
+    print("Startup recovery restored the exact gingerbread mesh and entered the hall:", ", ".join(scenarios))
+
+
 def expect_text(page, selector, part):
     try:
         page.wait_for_function(
@@ -85,6 +161,7 @@ def run(site, binary):
         exe = os.environ.get("CHROMIUM") or shutil.which("chromium")
         # Both flat and stereo paths draw using the actual WASM engine and WebGL context.
         browser = pw.chromium.launch(executable_path=exe, args=args)
+        check_startup_recovery(browser, base, site)
         desktop = browser.new_context(
             ignore_https_errors=True, reduced_motion="reduce", viewport={"width": 800, "height": 500}
         )

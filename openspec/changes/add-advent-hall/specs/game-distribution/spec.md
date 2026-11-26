@@ -46,3 +46,17 @@ The release checks SHALL require at least 95% executable-line coverage from unit
 
 - **WHEN** transport unit tests pass but two independent clients disagree after a range hit or portal crossing in the automated game test
 - **THEN** the candidate fails before Pages publication.
+
+### Requirement: Recover hall startup assets
+
+The Web client SHALL bound concurrent startup downloads, retry failed files, and recover a missing hall asset from the same published build before entering the hall.
+
+#### Scenario: A hall model URL keeps returning an error
+
+- **WHEN** the loose gingerbread model fails twice and the static host serves a partial or full recovery file
+- **THEN** the Web client restores the original model bytes and enables entry into the hall.
+
+#### Scenario: Both asset sources fail
+
+- **WHEN** the recovery file is also unavailable
+- **THEN** the loading screen identifies the failed asset and lets the player retry.
