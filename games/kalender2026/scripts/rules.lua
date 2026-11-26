@@ -444,5 +444,6 @@ function H.step(r, elapsed)
     end
 end
 function H.walk_speed(r, p)
-    return H.speed * (p.slow > r.time and 0.56 or 1)
+    local run = r.instances[p.space]
+    return (run and run.pack and run.pack.speed or H.speed) * (p.slow > r.time and 0.56 or 1)
 end

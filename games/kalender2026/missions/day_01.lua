@@ -1,5 +1,6 @@
 -- Last Launch from Tinseltown. Coordinates are metres, with Luna to the north.
 local M = {
+    speed = 8.25,
     title = "Last Launch from Tinseltown",
     ornament = "brass-rocket",
     tools = { "Snow Pistol", "Freezer", "Snow Rocket", "Shrink Ray", "Twin Tinsel Launchers" },
@@ -39,6 +40,46 @@ local bays = {
     [9] = { side = -1, z = -124, width = 35 },
     [16] = { side = 1, z = -233, width = 31 },
 }
+-- Waist-high supplies and access cards are walk-over pickups. Supplies are
+-- personal; a key opens its reader for everyone in the instance.
+local supplies = {
+    { "medkit", -6, -16 },
+    { "vest", 18, -21 },
+    { "medkit", 7, -62 },
+    { "vest", -18, -83 },
+    { "medkit", 5, -111 },
+    { "medkit", -2, -153 },
+    { "vest", 7, -193 },
+    { "medkit", 16, -230 },
+    { "medkit", -9, -267 },
+    { "vest", 9, -273 },
+}
+local passes = { [6] = { -18, -76 }, [9] = { -21, -120 } }
+local crates = { { 18, -27 }, { -22, -86 }, { -21, -128 }, { 20, -237 } }
+local function boxCross(x, z, tx, tz, cx, cz, rx, rz)
+    local first, last = 0, 1
+    local function slab(pos, delta, lo, hi)
+        if math.abs(delta) < 0.00001 then
+            return pos >= lo and pos <= hi
+        end
+        local a, b = (lo - pos) / delta, (hi - pos) / delta
+        first = math.max(first, math.min(a, b))
+        last = math.min(last, math.max(a, b))
+        return first <= last
+    end
+    return slab(x, tx - x, cx - rx, cx + rx) and slab(z, tz - z, cz - rz, cz + rz)
+end
+local function crateBlocks(x, z, tx, tz, pad)
+    for _, c in ipairs(crates) do
+        if boxCross(x, z, tx, tz, c[1], c[2], 1.2 + pad, 1.2 + pad) then
+            return true
+        end
+    end
+    return false
+end
+local function held(mask, i)
+    return math.floor(mask / 2 ^ (i - 1)) % 2 == 1
+end
 local function remaining(run, observer)
     local count, target, nearest = 0, nil, math.huge
     for _, actor in ipairs(run.actors) do
@@ -64,8 +105,12 @@ local function destination(run, observer)
         local post = posts[run.drive]
         return post[1], post[2], "Clear the hatchlings, then shoot the Queen. The lit post also stuns her."
     end
+    local pass = passes[run.progress]
+    if pass and not run.key and remaining(run) > 0 then
+        return pass[1], pass[2], "Grab the access card or clear the patrol."
+    end
     local waves = shootouts[run.progress]
-    if waves then
+    if waves and not run.key then
         local count, target = remaining(run, observer)
         if count > 0 then
             return target.x,
@@ -110,11 +155,12 @@ local function checkpoint(run)
 end
 function M.enter(run, p)
     p.x, p.z, p.tiny, p.vital = 0, checkpoint(run), false, 5
+    p.armor, p.claimed, p.kickAt = 0, p.claimed or 0, -1
     p.lastHurt = nil
     p.immunity = run.clock + 6
 end
 function M.exit(_, p)
-    p.tiny, p.vital = nil, nil
+    p.tiny, p.vital, p.armor, p.claimed, p.kickAt = nil, nil, nil, nil, nil
 end
 local function toolsAt(k)
     if k >= 17 then
@@ -160,13 +206,16 @@ local function spawnWave(run)
             x = bay.side * (bay.width - 4 - (3 * i + run.wave) % 10)
             z = bay.z + 6 - (i * 5) % 13
         end
+        if crateBlocks(x, z, x, z, 0.5) then
+            z = z + 3.6
+        end
         local kind = run.progress == 16 and i % 3 ~= 0 and 7 or (i + run.wave) % 2 + 1
         mob(run, kind, x, z, kind == 7 and 1 or 2)
     end
 end
 local function advance(run)
     run.progress = math.min(#stops, run.progress + 1)
-    run.wave, run.changed = 1, run.clock
+    run.wave, run.changed, run.key, run.reinforceAt = 1, run.clock, false, nil
     local k = run.progress
     if k == 9 then
         run.liftoff = run.clock
@@ -208,6 +257,7 @@ end
 function M.start(run)
     run.progress, run.clock, run.launch, run.charge, run.actors = 1, 0, 0, 0, {}
     run.secrets, run.wave, run.liftoff, run.drive, run.changed = 0, 1, 0, 1, 0
+    run.hostile = {}
     mob(run, 1, -3, 0, 2)
     mob(run, 1, 3, -4, 2)
 end
@@ -260,6 +310,12 @@ function M.move(x, z, dx, dz, run, p)
             end
         end
     end
+    if crateBlocks(x, z, nx, z, 0.24) then
+        nx = x
+    end
+    if crateBlocks(nx, z, nx, nz, 0.24) then
+        nz = z
+    end
     return nx, nz
 end
 function M.cart(run)
@@ -274,10 +330,150 @@ local function clearEggs(run)
     end
     return true
 end
+local function visible(x, z, tx, tz)
+    if crateBlocks(x, z, tx, tz, 0) then
+        return false
+    end
+    for _, edge in ipairs(boundaries) do
+        if (z - edge) * (tz - edge) < 0 and math.abs(x + (tx - x) * (edge - z) / (tz - z)) > 3.1 then
+            return false
+        end
+    end
+    -- A shot crossing an outer wall must pass through the open bay front.
+    for _, side in ipairs({ -1, 1 }) do
+        local start, finish = x * side, tx * side
+        if (start - 14) * (finish - 14) < 0 then
+            local crossing = z + (tz - z) * (14 - start) / (finish - start)
+            local open = false
+            for _, bay in pairs(bays) do
+                if bay.side == side and math.abs(crossing - bay.z) < 10 then
+                    open = true
+                    break
+                end
+            end
+            if not open then
+                return false
+            end
+        end
+    end
+    return true
+end
+local function damage(run, p, amount)
+    if p.immunity > run.clock then
+        return
+    end
+    local absorbed = math.min(p.armor or 0, amount)
+    p.armor = (p.armor or 0) - absorbed
+    p.vital = p.vital - amount + absorbed
+    p.immunity, p.lastHurt = run.clock + 1.15, run.clock
+    if p.vital <= 0 then
+        M.enter(run, p)
+    end
+end
+local function pickups(run, p)
+    for i, item in ipairs(supplies) do
+        if not held(p.claimed, i) and near(p, item[2], item[3], 1.45) then
+            local vest = item[1] == "vest"
+            local stat = vest and "armor" or "vital"
+            local cap = vest and 3 or 5
+            if p[stat] < cap then
+                p[stat] = math.min(cap, p[stat] + (vest and 2 or 3))
+                p.claimed = p.claimed + 2 ^ (i - 1)
+            end
+        end
+    end
+    local pass = passes[run.progress]
+    if pass and near(p, pass[1], pass[2], 1.55) then
+        run.key = true
+    end
+end
+local function moveBolts(run, r, dt)
+    for i = #run.hostile, 1, -1 do
+        local b = run.hostile[i]
+        local tx, ty, tz = b.x + b.vx * dt, b.y + b.vy * dt, b.z + b.vz * dt
+        local spent = run.clock >= b.expires or not visible(b.x, b.z, tx, tz)
+        if not spent then
+            local best, hit = 2, nil
+            local dx, dy, dz = tx - b.x, ty - b.y, tz - b.z
+            local length = math.max(0.000001, dx * dx + dy * dy + dz * dz)
+            for _, p in pairs(r.players) do
+                if p.space == 1 then
+                    local cy = eyeHeight(p) - (p.tiny and 0.15 or 0.55)
+                    local u =
+                        Hall.clamp(((p.x - b.x) * dx + (cy - b.y) * dy + (p.z - b.z) * dz) / length, 0, 1)
+                    if
+                        u < best
+                        and dist(p.x, p.z, b.x + u * dx, b.z + u * dz) + (cy - b.y - u * dy) ^ 2
+                            < (p.tiny and 0.36 or 0.72) ^ 2
+                    then
+                        hit, best = p, u
+                    end
+                end
+            end
+            if hit then
+                damage(run, hit, 1)
+                spent = true
+            end
+        end
+        if spent then
+            table.remove(run.hostile, i)
+        else
+            b.x, b.y, b.z = tx, ty, tz
+        end
+    end
+end
+local function ranged(run, a, p, distance, dt)
+    if a.ice > run.clock or a.small > run.clock or (a.impact and run.clock - a.impact.at < 0.22) then
+        a.windup = nil
+        a.nextAttack = run.clock + 0.65
+        return
+    end
+    local sight = distance < 26 and M.area(a.z) == M.area(p.z) and visible(a.x, a.z, p.x, p.z)
+    if a.windup then
+        if run.clock >= a.windup then
+            a.windup = nil
+            if sight and #run.hostile < 24 then
+                local speed = a.kind == 2 and 11 or 14
+                local y = roofHeight(a.z) + (a.kind == 2 and 2.05 or 1.2)
+                run.hostile[#run.hostile + 1] = {
+                    x = a.x,
+                    y = y,
+                    z = a.z,
+                    vx = a.ax * speed,
+                    vy = a.ay * speed,
+                    vz = a.az * speed,
+                    expires = run.clock + 2.4,
+                }
+            end
+            a.nextAttack = run.clock + 1.85 + (a.id % 4) * 0.23
+        end
+        return
+    end
+    a.nextAttack = a.nextAttack or run.clock + 0.75 + (a.id % 5) * 0.18
+    if sight and run.clock >= a.nextAttack then
+        local dy = eyeHeight(p) - (p.tiny and 0.15 or 0.55) - roofHeight(a.z) - (a.kind == 2 and 2.05 or 1.2)
+        local d = math.max(0.01, math.sqrt(distance * distance + dy * dy))
+        a.ax, a.ay, a.az = (p.x - a.x) / d, dy / d, (p.z - a.z) / d
+        a.windup = run.clock + (a.kind == 2 and 0.60 or 0.42)
+        a.yaw = math.deg(math.atan2(a.ax, a.az))
+        return
+    end
+    if distance < 0.01 or distance > 34 then
+        return
+    end
+    local dx, dz = (p.x - a.x) / distance, (p.z - a.z) / distance
+    local advance = distance > 10 and 2.5 or distance < 4 and -1.5 or 0
+    local side = a.kind == 2 and 1.9 * math.sin(run.clock * 1.2 + a.id) or 0
+    local nx, nz = a.x + (advance * dx - side * dz) * dt, a.z + (advance * dz + side * dx) * dt
+    if visible(a.x, a.z, nx, nz) then
+        a.x, a.z = M.move(a.x, a.z, nx - a.x, nz - a.z, run, p)
+    end
+end
 function M.step(run, r, dt)
     run.clock = run.clock + dt
+    moveBolts(run, r, dt)
     local waves = shootouts[run.progress]
-    if waves and run.wave < waves and remaining(run) == 0 then
+    if waves and not run.key and run.wave < waves and remaining(run) == 0 then
         run.reinforceAt = run.reinforceAt or run.clock + 0.85
         if run.clock >= run.reinforceAt then
             run.wave, run.reinforceAt = run.wave + 1, nil
@@ -288,9 +484,8 @@ function M.step(run, r, dt)
         if p.space == 1 and run.progress > 15 then
             p.tiny = false
         end
-        if p.space == 1 and p.vital < 5 and run.clock - (p.lastHurt or 0) > 8 then
-            p.vital = p.vital + 1
-            p.lastHurt = run.clock - 6
+        if p.space == 1 then
+            pickups(run, p)
         end
     end
     for _, a in ipairs(run.actors) do
@@ -306,7 +501,7 @@ function M.step(run, r, dt)
                 local dx, dz = player.x - a.x, player.z - a.z
                 local len = math.max(0.01, math.sqrt(best))
                 local oldX, oldZ = a.x, a.z
-                if a.ice <= run.clock then
+                if a.ice <= run.clock and not a.windup then
                     a.yaw = math.deg(math.atan2(dx, dz))
                 end
                 if a.kind == 3 then
@@ -361,6 +556,8 @@ function M.step(run, r, dt)
                     if a.kind == 5 and run.progress == 13 then
                         advance(run)
                     end
+                elseif a.kind <= 2 then
+                    ranged(run, a, player, len, dt)
                 elseif a.kind ~= 4 and a.ice <= run.clock and best < 18 ^ 2 and best > 1.2 then
                     local speed = a.kind == 7 and 2.3 or 1.1
                     a.x, a.z = a.x + dx / len * dt * speed, a.z + dz / len * dt * speed
@@ -373,13 +570,7 @@ function M.step(run, r, dt)
                     and best < 1.6 ^ 2
                     and player.immunity <= run.clock
                 then
-                    player.immunity = run.clock + 2.5
-                    player.vital = player.vital - 1
-                    player.lastHurt = run.clock
-                    player.slow = r.time + 1
-                    if player.vital <= 0 then
-                        M.enter(run, player)
-                    end
+                    damage(run, player, 1)
                 end
             end
         end
@@ -389,6 +580,31 @@ local function aimed(p, x, z, dx, dy, dz, y, radius)
     local ax, ay, az = x - p.x, y - (p.eye or eyeHeight(p)) - (p.oy or 0), z - p.z
     local along = ax * dx + ay * dy + az * dz
     return along >= -0.3 and along < 36 and ax * ax + ay * ay + az * az - along * along < radius * radius
+end
+-- The rooftop slope joins two level floors. Intersect the shot with
+-- each floor section so a downward shot can burst between enemies.
+local function floorImpact(origin, dx, dy, dz)
+    local eye = origin.eye + origin.oy
+    local cuts = { 0, 36 }
+    if math.abs(dz) > 0.0001 then
+        for _, z in ipairs({ roofEnd, roofEnd + 3.25 / 0.2955 }) do
+            local t = (z - origin.z) / dz
+            if t > 0 and t < 36 then
+                cuts[#cuts + 1] = t
+            end
+        end
+    end
+    table.sort(cuts)
+    local last = eye - roofHeight(origin.z)
+    for i = 2, #cuts do
+        local t = cuts[i]
+        local above = eye + dy * t - roofHeight(origin.z + dz * t)
+        if last > 0 and above <= 0 then
+            local at = cuts[i - 1] + (t - cuts[i - 1]) * last / (last - above)
+            return origin.x + dx * at, origin.z + dz * at
+        end
+        last = above
+    end
 end
 function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
     local length = math.sqrt(dx * dx + dy * dy + dz * dz)
@@ -417,6 +633,7 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
         if
             a.hp > 0
             and d < distance
+            and visible(origin.x, origin.z, a.x, a.z)
             and aimed(origin, a.x, a.z, dx, dy, dz, height + roofHeight(a.z), radius)
         then
             closest, distance = a, d
@@ -427,11 +644,12 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
         can
         and math.floor(run.secrets / can[3]) % 2 == 0
         and dist(origin.x, origin.z, can[1], can[2]) < distance
+        and visible(origin.x, origin.z, can[1], can[2])
         and aimed(origin, can[1], can[2], dx, dy, dz, 1.16, 0.85)
     then
         run.secrets = bit.bor(run.secrets, can[3])
         for _, a in ipairs(run.actors) do
-            if a.hp > 0 and dist(a.x, a.z, can[1], can[2]) < 7 ^ 2 then
+            if a.hp > 0 and dist(a.x, a.z, can[1], can[2]) < 7 ^ 2 and visible(can[1], can[2], a.x, a.z) then
                 a.hp = 0
                 a.impact = { at = run.clock, owner = p.id, seq = seq, dx = dx, dz = dz, result = 2 }
             end
@@ -443,7 +661,11 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
         if run.progress == 3 then
             x = 0
         end
-        if dist(origin.x, origin.z, x, z) < distance and aimed(origin, x, z, dx, dy, dz, 1.65, 1.1) then
+        if
+            dist(origin.x, origin.z, x, z) < distance
+            and visible(origin.x, origin.z, x, z)
+            and aimed(origin, x, z, dx, dy, dz, 1.65, 1.1)
+        then
             if run.progress == 19 then
                 for _, boss in ipairs(run.actors) do
                     if boss.kind == 6 then
@@ -457,8 +679,21 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
             return
         end
     end
+    local bx, bz
+    if k == 3 then
+        if closest then
+            bx, bz = closest.x, closest.z
+        end
+        local fx, fz = floorImpact(origin, dx, dy, dz)
+        if fx and dist(origin.x, origin.z, fx, fz) < distance and visible(origin.x, origin.z, fx, fz) then
+            bx, bz, closest = fx, fz, nil
+        end
+        if bx then
+            run.burst = { x = bx, z = bz, at = run.clock }
+        end
+    end
     for _, a in ipairs(run.actors) do
-        local hit = a == closest or (k == 3 and closest and dist(a.x, a.z, closest.x, closest.z) < 20)
+        local hit = a == closest or (bx and dist(a.x, a.z, bx, bz) < 20 and visible(bx, bz, a.x, a.z))
         if hit and a.hp > 0 then
             local hp = a.hp
             local frozen = a.ice > run.clock
@@ -498,6 +733,35 @@ function M.fire(run, p, seq, k, dx, dy, dz, r, ox, oy, oz)
         end
     end
 end
+function M.kick(run, p, seq, yaw)
+    if seq <= p.seq or seq % 1 ~= 0 or run.clock - (p.kickAt or -1) < 0.46 then
+        return
+    end
+    p.kickAt, p.seq = run.clock, seq
+    local dx, dz = -math.sin(math.rad(yaw)), -math.cos(math.rad(yaw))
+    local target, best = nil, 2.6 ^ 2
+    for _, a in ipairs(run.actors) do
+        local d = dist(p.x, p.z, a.x, a.z)
+        if
+            a.hp > 0
+            and d < best
+            and (a.x - p.x) * dx + (a.z - p.z) * dz >= math.sqrt(d) * 0.45
+            and visible(p.x, p.z, a.x, a.z)
+        then
+            target, best = a, d
+        end
+    end
+    if not target then
+        return
+    end
+    local a = target
+    local result = 3
+    if a.kind <= 2 or a.kind == 7 then
+        a.hp = (a.ice > run.clock or a.small > run.clock) and 0 or math.max(0, a.hp - 1)
+        result = a.hp == 0 and 2 or 1
+    end
+    a.impact = { at = run.clock, owner = p.id, seq = seq, dx = dx, dz = dz, result = result }
+end
 function M.act(run, p)
     local k = run.progress
     if near(p, -11, -27, 2.8) then
@@ -528,7 +792,7 @@ function M.act(run, p)
         end
         return
     end
-    if shootouts[k] and (run.wave < shootouts[k] or remaining(run) > 0) then
+    if shootouts[k] and not run.key and (run.wave < shootouts[k] or remaining(run) > 0) then
         return
     end
     local s = stops[k]
@@ -553,7 +817,6 @@ function M.act(run, p)
     if k == 15 then
         p.tiny = false
     end
-    p.vital = math.min(5, p.vital + 1)
     if k == 20 then
         return true
     end
@@ -596,7 +859,7 @@ function M.snapshot(rows, run, players, day)
         rows[#rows + 1] = string.format("D %d " .. format, day, ...)
     end
     emit(
-        "0 %.3f %.3f %d %.3f %d %d %.3f %d %.3f",
+        "0 %.3f %.3f %d %.3f %d %d %.3f %d %.3f %d",
         run.clock,
         run.launch,
         run.secrets,
@@ -605,12 +868,13 @@ function M.snapshot(rows, run, players, day)
         run.wave,
         run.liftoff,
         run.drive,
-        run.changed
+        run.changed,
+        run.key and 1 or 0
     )
     for _, a in ipairs(run.actors) do
         local h = a.impact
         emit(
-            "1 %d %.2f %.2f %d %.2f %.2f %d %d %.1f %.2f %.3f %d %d %.2f %.2f %d",
+            "1 %d %.2f %.2f %d %.2f %.2f %d %d %.1f %.2f %.3f %d %d %.2f %.2f %d %.3f",
             a.kind,
             a.x,
             a.z,
@@ -626,12 +890,28 @@ function M.snapshot(rows, run, players, day)
             h and h.seq or 0,
             h and h.dx or 0,
             h and h.dz or 0,
-            h and h.result or 0
+            h and h.result or 0,
+            a.windup or 0
         )
+    end
+    if run.burst and run.clock - run.burst.at < 0.35 then
+        emit("4 %.3f %.3f %.3f", run.burst.x, run.burst.z, run.burst.at)
+    end
+    for _, b in ipairs(run.hostile) do
+        emit("3 %.3f %.3f %.3f %.3f %.3f %.3f", b.x, b.y, b.z, b.vx, b.vy, b.vz)
     end
     for id, p in pairs(players) do
         if p.space == day then
-            emit("2 %d %d %d %d", id, p.tiny and 1 or 0, p.vital, p.seq)
+            emit(
+                "2 %d %d %d %d %d %d %.3f",
+                id,
+                p.tiny and 1 or 0,
+                p.vital,
+                p.seq,
+                p.armor,
+                p.claimed,
+                p.kickAt
+            )
         end
     end
 end
@@ -642,7 +922,7 @@ function M.read(r, w)
     end
     if
         w[3] == 0
-        and #w == 12
+        and #w == 13
         and posts[w[11]]
         and w[9] % 1 == 0
         and w[9] >= 1
@@ -651,10 +931,10 @@ function M.read(r, w)
         run.clock, run.launch, run.secrets, run.charge, run.slide = w[4], w[5], w[6], w[7], w[8] == 1
         run.wave, run.liftoff, run.drive = w[9], w[10], w[11]
         run.changed = w[12]
-        run.actors = {}
+        run.actors, run.hostile, run.key = {}, {}, w[13] == 1
     elseif
         w[3] == 1
-        and #w == 19
+        and #w == 20
         and run.actors
         and #run.actors < 32
         and w[4] % 1 == 0
@@ -672,14 +952,19 @@ function M.read(r, w)
             id = w[11],
             yaw = w[12],
             stride = w[13],
+            windup = w[20] > 0 and w[20] or nil,
         }
         if w[19] > 0 and w[19] <= 5 then
             a.impact = { at = w[14], owner = w[15], seq = w[16], dx = w[17], dz = w[18], result = w[19] }
         end
         run.actors[#run.actors + 1] = a
-    elseif w[3] == 2 and #w == 7 and r.players[w[4]] then
+    elseif w[3] == 4 and #w == 6 then
+        run.burst = { x = w[4], z = w[5], at = w[6] }
+    elseif w[3] == 3 and #w == 9 and run.hostile and #run.hostile < 24 then
+        run.hostile[#run.hostile + 1] = { x = w[4], y = w[5], z = w[6], vx = w[7], vy = w[8], vz = w[9] }
+    elseif w[3] == 2 and #w == 10 and r.players[w[4]] then
         local p = r.players[w[4]]
-        p.tiny, p.vital, p.seq = w[5] == 1, w[6], w[7]
+        p.tiny, p.vital, p.seq, p.armor, p.claimed, p.kickAt = w[5] == 1, w[6], w[7], w[8], w[9], w[10]
     else
         return false
     end
@@ -736,6 +1021,11 @@ function M.build(space, pedestal)
         "bullseye",
         "switch",
         "fizz",
+        "medkit",
+        "vest",
+        "freight-crate",
+        "keycard",
+        "quick-boot",
         "sidearm",
         "rpg",
         "freezer",
@@ -786,6 +1076,15 @@ function M.build(space, pedestal)
         nodes[name] = place(name, name, 0, -80, 0, 1)
     end
     art.ornament = eng.asset.load_mesh("assets/brass-rocket.glb")
+    for i, box in ipairs(crates) do
+        place("Freight cover", "freight-crate", box[1], 0, box[2], 1)
+    end
+    nodes.supplies = {}
+    for i, item in ipairs(supplies) do
+        nodes.supplies[i] = place(item[1], item[1], item[2], 0.2, item[3], 1)
+    end
+    nodes.card = place("Access card", "keycard", 0, -80, 0, 1)
+    nodes.boot = place("Quick kick", "quick-boot", 0, -80, 0, 1)
     nodes.prize = place("Brass ornament", "ornament", 0, -80, 0, 0.68)
     nodes.boxDoor = eng.scene.spawn("Concession shutter")
     eng.scene.set_pocket(nodes.boxDoor, pocket)
@@ -958,6 +1257,9 @@ local function animateActor(g, run, a, i, t, motion)
             elseif a.kind == 4 then
                 angle = leg and 0 or -12 - 32 * recoil + hover * 4
             end
+            if a.windup and j == 4 then
+                angle = -75
+            end
             if frozen then
                 angle, roll = 0, 0
             end
@@ -1044,6 +1346,44 @@ function M.render(g, dt)
     )
     set(nodes.prize, phase == 20 and 0 or -8, phase >= 16 and 1.1 or -80, phase == 20 and -296 or -234)
     spin(nodes.prize, 0, t * 42, 0)
+    for i, item in ipairs(supplies) do
+        set(nodes.supplies[i], item[2], held(p.claimed, i) and -80 or roofHeight(item[3]) + 0.12, item[3])
+    end
+    local pass = passes[phase]
+    if pass and not run.key then
+        set(nodes.card, pass[1], 1.1, pass[2])
+        spin(nodes.card, 0, 25 + t * 65 * motion, 0)
+    else
+        set(nodes.card, 0, -80, 0)
+    end
+    local kickAge = t - (p.kickAt or -1)
+    if kickAge >= 0 and kickAge < 0.32 then
+        local kick = math.sin(math.pi * kickAge / 0.32) * motion
+        local yaw = math.rad(g.yaw)
+        local reach = 0.52 + 0.45 * kick
+        set(
+            nodes.boot,
+            g.x - math.sin(yaw) * reach + 0.12 * math.cos(yaw),
+            eyeHeight(p) - 0.34 + kick * 0.14,
+            g.z - math.cos(yaw) * reach - 0.12 * math.sin(yaw)
+        )
+        spin(nodes.boot, 8 + kick * 16, g.yaw, 8)
+    else
+        set(nodes.boot, 0, -80, 0)
+    end
+    if g.feedback.dayJoined and g.dukeRun == run.id then
+        if g.dukeHealth and p.vital + p.armor < g.dukeHealth then
+            Feedback.sound(g, "thup2", 0.72, 0.75, 3)
+        end
+        if g.dukeClaimed ~= p.claimed or (run.key and not g.dukeKey) then
+            Feedback.sound(g, "bell", 0.48, 1.4, 2)
+        end
+        if p.kickAt ~= g.dukeKick and kickAge < 0.32 and p.kickAt >= 0 then
+            Feedback.sound(g, "throw", 0.55, 0.85, 2)
+        end
+    end
+    g.dukeRun, g.dukeHealth, g.dukeClaimed, g.dukeKey, g.dukeKick =
+        run.id, p.vital + p.armor, p.claimed, run.key, p.kickAt
     local tx, tz = destination(run, p)
     local can = soda[phase]
     local full = can and math.floor(run.secrets / can[3]) % 2 == 0
@@ -1135,9 +1475,46 @@ function M.render(g, dt)
 end
 function M.sprites(g)
     local run = g.room.instances[1]
+    if run.burst then
+        local b = run.burst
+        local age = run.clock - b.at
+        if age >= 0 and age < 0.28 then
+            local radius = 0.3 + age * 12
+            for i = 1, 8 do
+                local angle = math.pi * i / 4
+                eng.render.draw_sprite(
+                    b.x + radius * math.cos(angle),
+                    roofHeight(b.z) + 0.3 + age,
+                    b.z + radius * math.sin(angle),
+                    0.45,
+                    0.45,
+                    bolts[3]
+                )
+            end
+        end
+    end
+    local fraction = Hall.clamp(g.clock - (g.sampleAt or g.clock), 0, 0.08)
+    for _, b in ipairs(run.hostile) do
+        local x, y, z = b.x + fraction * b.vx, b.y + fraction * b.vy, b.z + fraction * b.vz
+        eng.render.draw_sprite(x, y, z, 0.36, 0.36, bolts[3])
+        eng.render.draw_sprite(x - 0.022 * b.vx, y - 0.022 * b.vy, z - 0.022 * b.vz, 0.18, 0.18, bolts[5])
+    end
+    for _, a in ipairs(run.actors) do
+        if a.hp > 0 and a.windup and a.windup > run.clock and a.ice <= run.clock then
+            local angle = math.rad(a.yaw)
+            eng.render.draw_sprite(
+                a.x + 0.62 * math.sin(angle) + 0.4 * math.cos(angle),
+                roofHeight(a.z) + (a.kind == 2 and 2.05 or 1.2),
+                a.z + 0.62 * math.cos(angle) - 0.4 * math.sin(angle),
+                0.34,
+                0.34,
+                bolts[1]
+            )
+        end
+    end
     local tx, tz = destination(run, g.room.players[g.id])
     local cue = run.done and "home"
-        or shootouts[run.progress] and remaining(run) > 0 and "aim"
+        or shootouts[run.progress] and not passes[run.progress] and remaining(run) > 0 and "aim"
         or ({
             [3] = "aim",
             [4] = "freeze",

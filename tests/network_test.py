@@ -180,7 +180,7 @@ class HallConnection(ClientConnection):
         return message
 
 
-def hello(url, room="friends", revision="tinseltown-arcade-1", **kwargs):
+def hello(url, room="friends", revision="tinseltown-assault-1", **kwargs):
     ws = connect(
         url,
         proxy=None,
@@ -218,6 +218,7 @@ def snapshot(ws, predicate, timeout=8):
             latest=0,
             wave_number=0,
             mission_players={},
+            kicks={},
             actors=[],
         )
         for row in lines[1:]:
@@ -269,6 +270,7 @@ def snapshot(ws, predicate, timeout=8):
                 state["wave_number"] = int(row[8])
             elif row[:3] == ["D", "1", "2"]:
                 state["mission_players"][int(row[3])] = int(row[6])
+                state["kicks"][int(row[3])] = float(row[9])
             elif row[0] == "T":
                 state["targets"][int(row[1])] = float(row[2])
             elif row[0] == "M":
@@ -294,7 +296,7 @@ def public_room(binary, root):
         url = f"ws://127.0.0.1:{port}"
         clients = []
 
-        def join(room="friends", revision="tinseltown-arcade-1"):
+        def join(room="friends", revision="tinseltown-assault-1"):
             ws, answer = hello(url, room, revision)
             stack.callback(ws.close)
             return ws, answer
@@ -326,7 +328,7 @@ def public_room(binary, root):
         joined = snapshot(new, lambda s: s["hits"] == 1)
         assert joined["wave"] == 1 and joined["latest"] == bell["id"]
         assert joined["seats"][8] != s["seats"][8]
-        new.send("HELLO3 tinseltown-arcade-1 friends")
+        new.send("HELLO3 tinseltown-assault-1 friends")
         assert len(snapshot(new, lambda s: True)["players"]) == 8
         with tempfile.TemporaryDirectory() as tmp, tls_proxy(port, tmp) as (secure, cert, names):
             witness, answer = join("native")
@@ -479,6 +481,10 @@ def last_launch(binary, root):
         clients[0].send("F 3 1 0 0 -1")
         state = snapshot(clients[1], lambda s: s["mission_players"].get(1) == 3)
         assert state["mission_players"][2] == 1
+        clients[0].send("K 4 0")
+        for peer in (clients[0], clients[1]):
+            kicked = snapshot(peer, lambda s: s["mission_players"].get(1) == 4)
+            assert kicked["kicks"][1] >= 0 and kicked["kicks"][2] < 0
         spectator = clients[7]
         spectator.send("F 1 1 -.1592 .00796 -.98722")
         shot = snapshot(spectator, lambda s: any(e["owner"] == 8 and e["code"] == 1 for e in s["events"]))

@@ -366,6 +366,7 @@ function updateHUD(text) {
     unlocked,
     hearts,
     stage,
+    armor,
   ] = text.split("|");
   if (lastOrnaments !== undefined && lastOrnaments !== ornaments) persist();
   lastOrnaments = ornaments;
@@ -395,7 +396,12 @@ function updateHUD(text) {
     .filter((v, i, a) => a.indexOf(v) === i)
     .join(" · ");
   if ($("feedbackText").textContent !== notice) $("feedbackText").textContent = notice;
-  $("practice").hidden = Number(visitors) > 0;
+  const inDispatch = space === "1" && !!missionTools;
+  $("armorStat").hidden = !inDispatch;
+  $("armor").textContent = armor || "0";
+  $("practice").hidden = !inDispatch && Number(visitors) > 0;
+  $("practiceLabel").textContent = inDispatch ? "Kick" : "Ring bell";
+  $("practice").title = inDispatch ? "Quick kick (R)" : "Ring the hall practice bell";
   for (const b of document.querySelectorAll("[data-weapon]")) {
     b.dataset.hallName ??= b.getAttribute("aria-label");
     const name = missionTools ? missionTools.split(",")[Number(b.dataset.weapon) - 1] : b.dataset.hallName;

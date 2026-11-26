@@ -39,7 +39,7 @@ end
 function host_hud()
     local g=game.state
     local p=g.room.players[g.id]
-    return hud().."|"..g.seq..","..tostring(g.range and g.range.hp or -1)..","..g.space..","..g.yaw
+    return hud().."|"..g.seq..","..tostring(g.range and g.range.hp or -1)..","..g.space..","..g.yaw..","..tostring(p.kickAt or -1)
 end
 """
 
@@ -120,6 +120,10 @@ def check(browser, url, options, capture):
     page.locator("#fire").tap()
     page.wait_for_function(state + "[1]==='0'")
     assert page.evaluate(state)[0] == "2"
+    assert page.locator("#practiceLabel").text_content() == "Kick"
+    page.locator("#practice").tap()
+    page.wait_for_function("Number(" + state + "[4])>=0")
+    assert page.evaluate(state)[0] == "3"
     if capture:
         page.screenshot(path=str(capture))
     assert not errors, errors

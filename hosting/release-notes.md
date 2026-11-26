@@ -1,6 +1,8 @@
-The Lantern Hall 0.6.1 fixes Web startup when a hall asset request fails. The browser loads a bounded number of loose files, retries failed downloads, and recovers missing bytes from a versioned copy hosted alongside the game. A retry button appears if the connection also fails during recovery.
+The Lantern Hall 0.7.0 brings faster strafing, ranged patrols and freight cover to Day 1. Dodge after the muzzle lights up, freeze and kick a guard, or fire a rocket at the floor between enemies. Medkits and armor are personal pickups. The two red access cards let the whole crew skip reinforcements.
 
-The existing 0.6.0 Linux room service is compatible. The mission revision remains `tinseltown-arcade-1`.
+Quick kick uses R on desktop, Kick on touchscreens and B on Quest.
+
+Room hosts should install the matching Linux service and restart it. This release uses the mission revision `tinseltown-assault-1`.
 
 [Play on GitHub Pages](https://stbange.github.io/kalender2026/)
 

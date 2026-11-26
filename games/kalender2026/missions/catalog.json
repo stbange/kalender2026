@@ -1,5 +1,5 @@
 {
-  "revision": "tinseltown-arcade-1",
+  "revision": "tinseltown-assault-1",
   "missions": [
     {
       "day": 1,
@@ -14,6 +14,11 @@
         "missions/day_01/cabin.glb",
         "missions/day_01/luna.glb",
         "missions/day_01/bowl.glb",
+        "missions/day_01/medkit.glb",
+        "missions/day_01/vest.glb",
+        "missions/day_01/keycard.glb",
+        "missions/day_01/freight-crate.glb",
+        "missions/day_01/quick-boot.glb",
         "missions/day_01/switch.glb",
         "missions/day_01/fizz.glb",
         "missions/day_01/bullseye.glb",

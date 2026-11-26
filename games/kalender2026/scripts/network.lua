@@ -45,6 +45,12 @@ function Net.command(r, id, line, packs)
                 Hall.fire(r, p, seq, k, dx, dy, dz, ox, oy, oz)
             end
         end
+    elseif w[1] == "K" then
+        local run = r.instances[p.space]
+        local seq, yaw = number(w[2], 1, 1000000000), number(w[3], -360, 360)
+        if seq and yaw and run and not run.done and run.pack.kick then
+            run.pack.kick(run, p, seq, yaw)
+        end
     elseif w[1] == "ENTER" then
         local day = number(w[2], 1, 24)
         if day and day == math.floor(day) then
@@ -178,7 +184,8 @@ function Net.read(s)
                 awards = w[9],
             }
             if w[6] > 0 then
-                r.instances[w[6]] = { progress = w[10], done = w[11] == 1 }
+                r.instances[w[6]] =
+                    { progress = w[10], done = w[11] == 1, pack = MissionPacks and MissionPacks[w[6]] }
             end
         elseif w[1] == "D" and MissionPacks and MissionPacks[w[2]] and MissionPacks[w[2]].read then
             if not MissionPacks[w[2]].read(r, w) then

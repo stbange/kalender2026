@@ -40,6 +40,7 @@
         <div class="readout">
           <span id="connection"></span><span><b id="days">0</b>/24 playable</span
           ><span><b id="bells">0</b> <em id="bellsLabel">bells</em></span
+          ><span id="armorStat" hidden><b id="armor">0</b> armor</span
           ><span><b id="visitors">5</b> <em id="visitorsLabel">visitors</em></span>
         </div>
         <div id="crosshair" aria-hidden="true">+</div>
@@ -66,7 +67,7 @@
         </div>
         <div id="weaponName"></div>
         <button id="practice" title="Ring the practice bell after clearing the hall">
-          Ring bell <kbd>R</kbd>
+          <span id="practiceLabel">Ring bell</span> <kbd>R</kbd>
         </button>
       </section>
       <div id="touch">
@@ -129,13 +130,13 @@
         </dd>
         <dt>Practice and interact</dt>
         <dd>
-          R rings the practice bell after a cleared encounter. E interacts. Walk through a ready portal to
-          enter.
+          R kicks in Door 1 and rings the practice bell after a cleared hall encounter. E interacts. Walk
+          through a ready portal to enter.
         </dd>
         <dt>Quest 3</dt>
         <dd>
           Left stick moves, right stick snap-turns, right trigger fires and right grip cycles tools. A
-          interacts and B rings the bell.
+          interacts and B kicks in Door 1 or rings the hall bell.
         </dd>
       </dl></template
     >

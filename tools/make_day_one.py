@@ -352,6 +352,44 @@ def bowl():
 
 
 def props():
+    # Loose, palette-indexed pickups, solid cover and the quick-kick view model.
+    m = Model()
+    m.box(0, 0.22, 0, 0.75, 0.44, 0.50, 4)
+    m.box(0, 0.46, 0, 0.28, 0.11, 0.12, 2)
+    for side in (-1, 1):
+        m.box(0, 0.24, side * 0.26, 0.13, 0.31, 0.024, 12)
+        m.box(0, 0.24, side * 0.265, 0.36, 0.105, 0.024, 12)
+    save(m, "medkit")
+    m = Model()
+    m.box(0, 0.24, 0, 0.65, 0.48, 0.34, 2)
+    for side in (-1, 1):
+        m.box(side * 0.23, 0.52, 0, 0.16, 0.18, 0.30, 15)
+        m.box(side * 0.18, 0.37, 0.18, 0.28, 0.20, 0.10, 25)
+    for h in (0.13, 0.22):
+        m.box(0, h, 0.18, 0.55, 0.06, 0.08, 3)
+    save(m, "vest")
+    m = Model()
+    m.box(0, 0, 0, 0.8, 0.48, 0.065, 12)
+    for side in (-1, 1):
+        m.box(-0.21, 0.04, side * 0.038, 0.16, 0.16, 0.02, 16)
+        m.box(0, -0.13, side * 0.038, 0.72, 0.065, 0.02, 1)
+    save(m, "keycard")
+    m = Model()
+    m.box(0, 1.36, 0, 2.4, 2.72, 2.4, 7)
+    for side in (-1, 1):
+        for h in (0.17, 1.35, 2.53):
+            m.box(0, h, 1.18 * side, 2.41, 0.15, 0.10, 15)
+            m.box(1.18 * side, h, 0, 0.1, 0.15, 2.41, 15)
+        m.beam((-1.05, 0.35, 1.22 * side), (1.05, 2.35, 1.22 * side), 0.18, 9)
+    save(m, "freight-crate")
+    m = Model()
+    m.box(0, 0.10, 0.05, 0.24, 0.27, 0.26, 23)
+    m.box(0, -0.05, -0.08, 0.27, 0.20, 0.50, 1)
+    m.box(0, -0.12, -0.09, 0.29, 0.07, 0.53, 2)
+    m.box(0, -0.015, -0.27, 0.265, 0.12, 0.17, 3)
+    for z in (-0.12, -0.055, 0.01):
+        m.box(0, 0.065, z, 0.19, 0.035, 0.035, 8)
+    save(m, "quick-boot")
     prize = Model()
     rocket(prize, 0, 0, 0, 0.30, 16)
     prize.cone(0, 1.58, 0, 0.08, 0.08, 0.14, 15)
@@ -547,7 +585,7 @@ if __name__ == "__main__":
     for build in (cinema, diner, silos, flight, luna, bowl, props):
         build()
     catalog = {
-        "revision": "tinseltown-arcade-1",
+        "revision": "tinseltown-assault-1",
         "missions": [
             {
                 "day": 1,

@@ -20,12 +20,14 @@ Unpack the whole native archive and run `lantern.exe` or `./lantern`. The Web ed
 | Throw | Left mouse button | Tap Fire or double-tap the look area. Hold the second tap to keep firing while aiming. | Right trigger |
 | Select a snowcaster | 1–5 or Q | Tap a tool | Right grip |
 | Use objective | E | Use | A |
-| Ring the practice bell | R | Ring bell, or Use at the range | B |
+| Quick kick in Door 1 / ring the hall practice bell | R | Kick / Ring bell | B |
 | Enter a ready door | Walk into the arch | Walk into the arch | Walk into the arch |
 
 The pistol fires one quick snowball. The Flurry Fan throws three in a fan. Hold the Snow Spinner for rapid fire. The Bankshot bounces around corners. The Snow Rocket bursts into a cloud that can hit nearby targets. Each arrival wave includes a scarf snowman, gingerbread skipper, penguin skater, clockwork guard and frost wisp. They appear a few seconds apart. The first friend to return from a mission starts one shared return wave. Other returning friends and late arrivals join the same wave.
 
 During playtesting, every installed mission opens as soon as its pack is available. Walk into Door 1 today in solo or a live room. The other doors follow the Warsaw calendar and show **Mission in preparation** once their date arrives. Installed missions support independent entry, shared objectives and walking back to the hall. Personal ornaments are saved on the device. Door 1 includes **Last Launch from Tinseltown**. Follow the stolen brass rocket from the Midnight Cinema to the Moon Bowl. Floor arrows and named exits lead through the diner, launch pad and lunar base. The mission unlocks five weapons with their own models, moving parts, shot effects and sounds. Hold Fire for direct shots. Aiming at a red FIZZ can clears a nearby crowd. Freeze the diner skater and tap Use to send it into the till. At the stadium, clear the hatchlings and shoot the Queen, then hit the sideline target to collect the ornament. Friends share the fights and checkpoints. [See the five weapons in-game](docs/day-one-armory.webp) · [Meet the seven enemies](docs/day-one-enemies.webp).
+
+In Door 1 you run faster than in the hall. Watch an usher raise its weapon, then strafe across its line of fire. Jetpack patrols weave sideways. Freight crates stop incoming bolts and shield enemies from blasts. Aim the Snow Rocket at the floor between enemies, or freeze a guard and shatter it with a quick kick. Walk over medkits and armor vests to collect them. Each friend gets their own supplies. At the dead-letter office and the dispatch bay, one player can grab the red access card and another can use the reader while the patrol is still fighting.
 
 For local Web play, serve the extracted build with `python3 -m http.server 8000 --bind 127.0.0.1` and open `http://127.0.0.1:8000/`. Native clients can launch the executable directly.
 
@@ -39,7 +41,7 @@ Open **Feedback** in the Web menu or press **F3** in the native game to change m
 
 ## Host a room on Linux
 
-The **0.6.1** client and the **0.6.0 or 0.6.1** room service use the **tinseltown-arcade-1** mission catalog revision. The game uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
+The **0.7.0** client and room service use the **tinseltown-assault-1** mission catalog revision. The game uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
 
 1. Point a domain at the host. Allow inbound TCP on ports 80 and 443 for Caddy's HTTPS certificate and WebSocket traffic. Keep port 8787 private.
 2. Install [Caddy](https://caddyserver.com/docs/install), replace the example domain in [hosting/Caddyfile](hosting/Caddyfile) and use it as the Caddy configuration. Caddy terminates TLS and proxies WebSocket upgrades.

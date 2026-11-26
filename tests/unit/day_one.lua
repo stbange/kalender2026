@@ -77,7 +77,10 @@ local function clearRoom(phase)
                     fire(1, a.x, a.z)
                 end
             end
-            assert(a.hp == 0)
+            assert(
+                a.hp == 0,
+                string.format("stage %d wave %d actor %d at %.2f / %.2f", phase, wave, a.id, a.x, a.z)
+            )
         end
         if wave < waves then
             pos(stop[3], stop[4])
@@ -264,5 +267,107 @@ pos(0, -300)
 Net.command(r, 1, "BACK", MissionPacks)
 assert(p.space == 0)
 assert(not m.read({ instances = {} }, { "D", 1, 0 }))
+-- Exercise the room authority and a remote client's view of the same fight.
+do
+    local room = Hall.new(1)
+    local function player(id)
+        local member = Hall.join(room, id)
+        member.x, member.z = Hall.door(1)
+        Hall.enter(room, member, 1, MissionPacks)
+        return member
+    end
+    local hero, friend = player(1), player(2)
+    local battle = room.instances[1]
+    local guard = battle.actors[1]
+    battle.actors = { guard }
+    battle.progress = 4
+    hero.x, hero.z, hero.immunity = 0, -52, 0
+    friend.x, friend.z = 9, -70
+    guard.x, guard.z, guard.nextAttack = 0, -60, 0
+    local function step(n)
+        for i = 1, n do
+            Hall.step(room, 0.05)
+        end
+    end
+    local function remote()
+        return assert(Net.read(Net.snapshot(room)))
+    end
+    local function kick(yaw)
+        Net.command(room, hero.id, string.format("K %d %.2f", hero.seq + 1, yaw), MissionPacks)
+    end
+    step(1)
+    assert(guard.windup and remote().instances[1].actors[1].windup)
+    hero.x = 4
+    step(10)
+    assert(#battle.hostile == 1 and #remote().instances[1].hostile == 1)
+    step(16)
+    assert(hero.vital == 5, "Sidestepping after the tell dodges the locked shot")
+    hero.x, hero.armor, guard.nextAttack = 0, 1, 0
+    step(29)
+    assert(hero.vital == 5 and hero.armor == 0, "Armor takes the next bolt")
+    guard.nextAttack, hero.immunity = 0, 0
+    step(29)
+    assert(hero.vital == 4)
+    guard.nextAttack = 0
+    step(1)
+    assert(guard.windup)
+    Net.command(room, 1, "F 1 2 0 0 -1", MissionPacks)
+    step(1)
+    assert(guard.ice > battle.clock and not guard.windup)
+    hero.z = guard.z + 1.8
+    kick(180)
+    assert(guard.hp == 2)
+    kick(0)
+    assert(guard.hp == 2 and hero.seq == 2, "Kick cooldown includes misses")
+    step(10)
+    kick(0)
+    assert(guard.hp == 0 and guard.impact.result == 2 and remote().players[1].kickAt > 0)
+    local function supply(p, x, z)
+        p.x, p.z = x, z
+        step(1)
+    end
+    supply(friend, -6, -16)
+    assert(friend.claimed == 0, "Full health leaves a medkit on the floor")
+    friend.vital = 1
+    supply(friend, -6, -16)
+    assert(friend.vital == 4 and friend.claimed == 1)
+    supply(hero, -6, -16)
+    assert(hero.vital == 5 and hero.claimed == 1)
+    supply(hero, 18, -21)
+    assert(hero.armor == 2 and remote().players[1].claimed == 3)
+    supply(hero, 18, -21)
+    assert(hero.armor == 2)
+    battle.progress = 6
+    guard.hp = 2
+    supply(hero, -18, -76)
+    assert(remote().instances[1].key)
+    friend.x, friend.z = -10, -80
+    m.act(battle, friend)
+    assert(battle.progress == 7 and guard.hp == 2 and not battle.key)
+    battle.progress = 9
+    hero.x, hero.z = -21, -125
+    guard.x, guard.z, guard.ice, guard.hp = -21, -131, 0, 2
+    guard.nextAttack = 0
+    step(1)
+    assert(not guard.windup)
+    local _, stopped = m.move(hero.x, hero.z, 0, -5, battle, hero)
+    assert(stopped == hero.z, "Cannot walk through freight cover")
+    room.time = room.time + 1
+    Net.command(room, 1, "F 5 3 0 0 -1", MissionPacks)
+    assert(guard.hp == 2)
+    -- The shot lands three metres to the side of the guard. A second guard
+    -- within the blast radius on the far side of the crate is sheltered.
+    hero.x, hero.z = -21, -119
+    guard.x, guard.z = -18, -126
+    local shelter =
+        { id = 99, kind = 1, x = -21, z = -129.7, hp = 2, ice = 0, small = 0, stride = 0, yaw = 0 }
+    battle.actors[2] = shelter
+    room.time = room.time + 1
+    Net.command(room, 1, "F 6 3 0 -0.22143 -1", MissionPacks)
+    assert(guard.hp == 0 and shelter.hp == 2 and remote().instances[1].burst)
+    local copy = remote()
+    assert(Hall.walk_speed(copy, copy.players[1]) == 8.25 and Hall.walk_speed(room, hero) == 8.25)
+end
+
 MissionPacks = old
 print("Day 1 from the cinema to the Moon Bowl, with shared tools, joins and rewards, passed.")

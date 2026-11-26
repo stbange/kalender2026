@@ -214,7 +214,13 @@ function update(dt)
         host_weapon()
     end
     if eng.input.pressed("practice") then
-        command(g, "BELL")
+        local pack = MissionPacks[g.space]
+        if pack and pack.kick and not r.instances[g.space].done then
+            g.seq = g.seq + 1
+            command(g, string.format("K %d %.3f", g.seq, (g.xr and g.xr.yaw or g.yaw) % 360))
+        else
+            command(g, "BELL")
+        end
     end
     local dx, dz
     local oldYaw = g.yaw
@@ -376,6 +382,7 @@ function host_hud()
         ) or 5,
         r.players[g.id] and r.players[g.id].vital or "",
         r.instances[g.space] and r.instances[g.space].progress or "",
+        r.players[g.id] and r.players[g.id].armor or "",
     }, "|")
 end
 function draw()
@@ -402,7 +409,7 @@ function draw()
     eng.render.draw_text(
         pack
                 and pack.tools
-                and ("DAY 01   /   " .. name .. "   /   Snow hearts " .. (g.room.players[g.id].vital or 5))
+                and ("DAY 01   /   " .. name .. "   /   Snow hearts " .. (g.room.players[g.id].vital or 5) .. "   /   Armor " .. (g.room.players[g.id].armor or 0) .. "   /   R Kick")
             or string.format(
                 "%d  %s    |    bells %d    |    wave %d",
                 g.weapon,
