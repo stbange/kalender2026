@@ -1,7 +1,0 @@
-/build*/
-/dist/
-__pycache__/
-*.gcda
-*.gcno
-*.engb
-*.lcov
