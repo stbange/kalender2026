@@ -180,7 +180,7 @@ class HallConnection(ClientConnection):
         return message
 
 
-def hello(url, room="friends", revision="tinseltown-tour-1", **kwargs):
+def hello(url, room="friends", revision="tinseltown-streets-1", **kwargs):
     ws = connect(
         url,
         proxy=None,
@@ -304,7 +304,7 @@ def public_room(binary, root):
         url = f"ws://127.0.0.1:{port}"
         clients = []
 
-        def join(room="friends", revision="tinseltown-tour-1"):
+        def join(room="friends", revision="tinseltown-streets-1"):
             ws, answer = hello(url, room, revision)
             stack.callback(ws.close)
             return ws, answer
@@ -336,7 +336,7 @@ def public_room(binary, root):
         joined = snapshot(new, lambda s: s["hits"] == 1)
         assert joined["wave"] == 1 and joined["latest"] == bell["id"]
         assert joined["seats"][8] != s["seats"][8]
-        new.send("HELLO3 tinseltown-tour-1 friends")
+        new.send("HELLO3 tinseltown-streets-1 friends")
         assert len(snapshot(new, lambda s: True)["players"]) == 8
         with tempfile.TemporaryDirectory() as tmp, tls_proxy(port, tmp) as (secure, cert, names):
             witness, answer = join("native")

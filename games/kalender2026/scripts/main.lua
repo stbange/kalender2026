@@ -237,6 +237,9 @@ function update(dt)
     if pack and pack.move then
         if not g.online and (g.x ~= p.x or g.z ~= p.z) then
             g.x, g.z = p.x, p.z
+            if run.seed then
+                g.yaw = p.yaw
+            end
         end
         local unlocked = pack.unlocked(run)
         if g.lastUnlock ~= unlocked then

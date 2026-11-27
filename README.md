@@ -33,9 +33,11 @@ In Door 1 you run faster than in the hall. Watch an usher raise its weapon, then
 
 On the starting rooftop, press **Use** at the **World Tour** sign directly in front of you. The striped vent leads to the original Tinseltown mission. In co-op, the first route choice takes the crew together.
 
-Each fresh tour generates three maps. In **Los Angeles**, fight along a palm-lined movie street with studio cases for cover. On **Luna**, cross a cratered relay yard under Earthrise. In **Bettinghausen**, cross the Ahse between Oberdorf and Unterdorf, past half-timbered farms and stacked straw. The village is a fictional layout inspired by the local geography. [Bettinghausen village history](https://www.badsassendorf.de/de/erleben-geniessen/ortsteile/bettinghausen)
+Each fresh tour carves a new network of streets and passages for all three maps. The turns, side streets, loops, cover, and enemy positions come from the shared map seed printed after **#** in the mission hint. In **Los Angeles**, fight along a palm-lined movie street with studio cases for cover. On **Luna**, cross a cratered relay yard under Earthrise. In **Bettinghausen**, cross the Ahse between Oberdorf and Unterdorf, past half-timbered farms and stacked straw. The village is a fictional layout inspired by the local geography. [Bettinghausen village history](https://www.badsassendorf.de/de/erleben-geniessen/ortsteile/bettinghausen)
 
 Clear each sector and **Use** its marked exit. Couriers fan their shots across a lane, ground patrols fire pairs, and a braced heavy fires a five-bolt salvo. Armor absorbs hits before hearts. Each new destination supplies the crew, and losing your last heart sends you back to the current sector. Friends can join in progress. Finish the ninth firefight and use the final exit to earn the Door 1 ornament. A new tour is generated after the last player leaves the instance.
+
+[Compare the walkable streets and exits from two Los Angeles departures](docs/world-tour-layouts.png).
 
 For local Web play, serve the extracted build with `python3 -m http.server 8000 --bind 127.0.0.1` and open `http://127.0.0.1:8000/`. Native clients can launch the executable directly.
 
@@ -49,7 +51,7 @@ Open **Feedback** in the Web menu or press **F3** in the native game to change m
 
 ## Host a room on Linux
 
-The **0.8.0** client and room service use the **tinseltown-tour-1** mission catalog revision. The game uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
+The **0.9.0** client and room service use the **tinseltown-streets-1** mission catalog revision. The game uses the engine’s binary WebSocket format. Install the contents of the dedicated Linux room archive in `/opt/lantern`. The full Linux client archive can also host a room. From any directory, run `/opt/lantern/lantern --serve --port 8787`. For local testing use `ws://127.0.0.1:8787`. Friends on the HTTPS Pages site need a public `wss://` address.
 
 1. Point a domain at the host. Allow inbound TCP on ports 80 and 443 for Caddy's HTTPS certificate and WebSocket traffic. Keep port 8787 private.
 2. Install [Caddy](https://caddyserver.com/docs/install), replace the example domain in [hosting/Caddyfile](hosting/Caddyfile) and use it as the Caddy configuration. Caddy terminates TLS and proxies WebSocket upgrades.

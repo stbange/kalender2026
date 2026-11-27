@@ -397,43 +397,77 @@ do
         return live
     end
     local originalSeed = run.seed
-    local originalGate = run.layout.rooms[1].gate
+    local function topology(map)
+        local signature = {}
+        for row = 1, 9 do
+            for col = 1, 5 do
+                local cell = map.tiles[(row - 1) * 5 + col]
+                local mask = 0
+                if cell then
+                    for d = 1, 4 do
+                        if cell.links[d] then
+                            mask = mask + 2 ^ (d - 1)
+                        end
+                    end
+                end
+                signature[#signature + 1] = string.format("%x", mask)
+            end
+        end
+        return table.concat(signature)
+    end
+    local first = topology(run.layout)
     local layouts = {}
     for i = 1, 20 do
         run.seed = i * 7919
-        m.enter(run, buddy)
-        local c = run.layout.rooms[1]
-        layouts[c.gate .. ":" .. c.back .. ":" .. c.l] = true
-        local x, z = m.move(c.gate, c.back + 1.6, 0, -9, run, buddy)
-        assert(z > c.back)
-        local b
-        for _, block in ipairs(run.layout.blocks) do
-            if block.style == "cover" then
-                b = block
-                break
+        for city = 1, 3 do
+            run.progress = city * 3
+            m.enter(run, buddy)
+            local map = run.layout
+            local sig = topology(map)
+            assert(not layouts[sig], "Seeds must vary walkable passages")
+            layouts[sig] = true
+            -- Flood the graph using the actual player collision test. Closed
+            -- shared walls must also reject travel between adjacent streets.
+            local todo = { map.rooms[1].entry }
+            local seen = { [todo[1].id] = true }
+            local cursor = 1
+            while todo[cursor] do
+                local v = todo[cursor]
+                for d, delta in ipairs({ { 0, -1 }, { 1, 0 }, { 0, 1 }, { -1, 0 } }) do
+                    local dx, dz = delta[1] * map.size, delta[2] * map.size
+                    local x, z = m.move(v.x, v.z, dx, dz, run, buddy)
+                    local id = v.links[d]
+                    if id then
+                        assert(x == v.x + dx and z == v.z + dz, "Passage blocked")
+                        if not seen[id] then
+                            todo[#todo + 1] = map.tiles[id]
+                            seen[id] = true
+                        end
+                    else
+                        assert(x ~= v.x + dx or z ~= v.z + dz, "Missing wall")
+                    end
+                end
+                cursor = cursor + 1
+            end
+            assert(#todo == #map.cells and seen[map.rooms[3].exit.id])
+            for _, room in ipairs(map.rooms) do
+                assert(math.abs(room.entry.col - room.exit.col) >= 2)
             end
         end
-        x, z = m.move(b.x, b.z + b.d / 2 + 0.7, 0, -2, run, buddy)
-        assert(z > b.z + b.d / 2)
     end
-    local count = 0
-    for _ in pairs(layouts) do
-        count = count + 1
-    end
-    assert(count > 15)
-    run.seed = originalSeed
+    run.progress, run.seed = 1, originalSeed
     m.enter(run, buddy)
-    assert(run.layout.rooms[1].gate == originalGate)
+    assert(topology(run.layout) == first)
     for sector = 1, 9 do
         assert(run.progress == sector)
         local map = run.layout
         local c = map.rooms[(sector - 1) % 3 + 1]
         local live = render()
-        assert(live.layout.rooms[(sector - 1) % 3 + 1].back == c.back)
-        p.x, p.z = map.x, c.back + 8
+        assert(topology(live.layout) == topology(map))
+        p.x, p.z = c.gate, c.back + 8
         local byKind = {}
         for _, a in ipairs(run.actors) do
-            a.x, a.z = map.x, c.back + 2
+            a.x, a.z = c.gate, c.back + 2
             a.nextAttack = 0
             byKind[a.kind] = a
         end
@@ -516,6 +550,20 @@ do
         Hall.objective(room, p, MissionPacks)
     end
     assert(run.done and p.awards == 1 and buddy.awards == 1 and m.canReturn(run, p))
+    Hall.back(room, p)
+    p.x, p.z = Hall.door(1)
+    Hall.enter(room, p, 1, MissionPacks)
+    assert(room.instances[1].seed == originalSeed, "A friend still in the tour keeps its layout")
+    Hall.back(room, p)
+    Hall.back(room, buddy)
+    p.x, p.z = Hall.door(1)
+    Hall.enter(room, p, 1, MissionPacks)
+    Hall.objective(room, p, MissionPacks)
+    local fresh = room.instances[1]
+    assert(
+        fresh.seed ~= originalSeed and topology(fresh.layout) ~= first,
+        "A new departure gets new passages"
+    )
     g.room, g.space = r, 0
 end
 

@@ -100,7 +100,7 @@ local posts = { { 0, -278 }, { -8, -266 }, { 8, -289 } }
 local Tour
 local function destination(run, observer)
     if run.seed then
-        return Tour.destination(run)
+        return Tour.destination(run, observer)
     end
     if run.progress == 19 then
         local x, z = M.cart(run)
@@ -205,8 +205,7 @@ local function mob(run, kind, x, z, hp)
         dz = 0,
     }
 end
--- Each map is reconstructed from one server seed. Doors sit in the overlap of
--- adjacent courts; the opening stays reachable from either side of the cover.
+-- All clients reconstruct the same city from the seed chosen at departure.
 Tour = {
     names = { "Los Angeles", "Luna", "Bettinghausen" },
     places = {
@@ -221,9 +220,17 @@ end
 local function leg(run)
     return math.floor((run.progress - 1) / 3) + 1
 end
+-- Carve a connected graph on five columns. Adjacent occupied squares may
+-- have a wall between them: links are the passages players actually traverse.
+local directions = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 } }
 local function layout(run)
     local city = leg(run)
     if run.layout and run.layout.city == city and run.layout.seed == run.seed then
+        return run.layout
+    end
+    -- Snapshots replace the client run table. Reuse immutable geometry there.
+    if Tour.cached and Tour.cached.city == city and Tour.cached.seed == run.seed then
+        run.layout = Tour.cached
         return run.layout
     end
     local state = 1 + (run.seed + city * 17389) % 2147483646
@@ -231,71 +238,290 @@ local function layout(run)
         state = state * 48271 % 2147483647
         return state % n
     end
+    local size = ({ 10, 11, 9 })[city]
     local x, front = city * 100, -26
-    local map = { city = city, seed = run.seed, x = x, rooms = {}, blocks = {} }
-    local function block(x, z, w, d, height, style)
-        map.blocks[#map.blocks + 1] = { x = x, z = z, w = w, d = d, h = height, style = style }
+    local map = {
+        city = city,
+        seed = run.seed,
+        x = x,
+        size = size,
+        front = front,
+        rooms = {},
+        blocks = {},
+        tiles = {},
+        cells = {},
+    }
+    local function tile(c, row)
+        local id = (row - 1) * 5 + c
+        local v = map.tiles[id]
+        if not v then
+            v = {
+                id = id,
+                col = c,
+                row = row,
+                x = x + (c - 3) * size,
+                z = front - (row - 0.5) * size,
+                links = {},
+            }
+            map.tiles[id] = v
+            map.cells[#map.cells + 1] = v
+        end
+        return v
     end
-    local fork = 1 + roll(2)
-    for i = 1, 3 do
-        local base = city == 2 and 14 or city == 3 and 10 or 12
-        local l, r = x - base - roll(4), x + base + roll(4)
-        local back = front - (city == 2 and 20 or city == 3 and 25 or 22) - roll(6)
-        local gate = x + roll(11) - 5
-        local room = { l = l, r = r, back = back, front = front, gate = gate, spawns = {} }
-        map.rooms[i] = room
-        local mid = (back + front) / 2
-        block(l, mid, 0.6, front - back, city == 2 and 1.1 or 0.95, "wall")
-        block(r, mid, 0.6, front - back, city == 2 and 1.1 or 0.95, "wall")
-        -- Extend partitions across the widest possible adjoining court.
-        local left, right = x - 18, x + 18
-        local gaps = { { gate - 2.4, gate + 2.4 } }
-        if i == fork and (city ~= 3 or i ~= 1) then
-            local bypass = x + (gate >= x and -8 or 8)
-            gaps[#gaps + 1] = { bypass - 1.5, bypass + 1.5 }
-            table.sort(gaps, function(a, b)
-                return a[1] < b[1]
-            end)
+    local function link(a, b, dir)
+        a.links[dir] = b.id
+        b.links[(dir + 1) % 4 + 1] = a.id
+        return b
+    end
+    local function across(a, c)
+        while a.col ~= c do
+            local step = c > a.col and 1 or -1
+            a = link(a, tile(a.col + step, a.row), step == 1 and 2 or 4)
         end
-        local height = city == 3 and i == 1 and 0.48 or 1.55
-        for _, gap in ipairs(gaps) do
-            block((left + gap[1]) / 2, back, gap[1] - left, 0.8, height, "partition")
-            left = gap[2]
+        return a
+    end
+    local function block(bx, bz, w, d, h, style)
+        map.blocks[#map.blocks + 1] = { x = bx, z = bz, w = w, d = d, h = h, style = style }
+    end
+    local entry = 3
+    for sector = 1, 3 do
+        local row = 1 + (sector - 1) * 3
+        local first = tile(entry, row)
+        if sector > 1 then
+            link(map.rooms[sector - 1].exit, first, 1)
         end
-        block((left + right) / 2, back, right - left, 0.8, height, "partition")
-        for _, side in ipairs({ -1, 1 }) do
-            block(x + side * (4 + roll(4)), mid + roll(5) - 2, 2 + roll(3), 2 + roll(3), 2.5, "cover")
+        local exits = {}
+        for c = 1, 5 do
+            if math.abs(c - entry) >= 2 then
+                exits[#exits + 1] = c
+            end
+        end
+        local finish = exits[1 + roll(#exits)]
+        local bend = 1 + roll(5)
+        local a = across(first, bend)
+        a = link(a, tile(bend, row + 1), 1)
+        a = across(a, finish)
+        local exit = link(a, tile(finish, row + 2), 1)
+        local room = {
+            entry = first,
+            exit = exit,
+            heading = bend == entry and 0 or (bend > entry and -55 or 55),
+            gate = exit.x,
+            front = first.z + size / 2,
+            back = exit.z - size / 2,
+            spawns = {},
+        }
+        map.rooms[sector] = room
+        -- Grow spurs from the main route, then open a subset of adjoining
+        -- walls to produce loops. Frontiers always attach to a reachable tile.
+        for j = 1, 2 + roll(4) do
+            local candidates = {}
+            for _, v in ipairs(map.cells) do
+                if v.row >= row then
+                    for dir, delta in ipairs(directions) do
+                        local c, r = v.col + delta[1], v.row + delta[2]
+                        if
+                            c >= 1
+                            and c <= 5
+                            and r >= row
+                            and r <= row + 2
+                            and not map.tiles[(r - 1) * 5 + c]
+                        then
+                            candidates[#candidates + 1] = { v, dir, c, r }
+                        end
+                    end
+                end
+            end
+            if #candidates > 0 then
+                local f = candidates[1 + roll(#candidates)]
+                link(f[1], tile(f[3], f[4]), f[2])
+            end
+        end
+        local sites = {}
+        for _, v in ipairs(map.cells) do
+            if v.row >= row then
+                for dir = 1, 2 do
+                    local delta = directions[dir]
+                    local c, r = v.col + delta[1], v.row + delta[2]
+                    local adjacent = c <= 5 and map.tiles[(r - 1) * 5 + c]
+                    if adjacent and not v.links[dir] and roll(3) == 0 then
+                        link(v, adjacent, dir)
+                    end
+                end
+                if v ~= first then
+                    sites[#sites + 1] = v
+                end
+            end
+        end
+        -- Keep tile centers and the four center-to-center lanes walkable.
+        for j = #sites, 2, -1 do
+            local n = 1 + roll(j)
+            sites[j], sites[n] = sites[n], sites[j]
+        end
+        for i, v in ipairs(sites) do
+            if i % 2 == 1 and v ~= exit then
+                local sx, sz = roll(2) * 2 - 1, roll(2) * 2 - 1
+                block(
+                    v.x + sx * size * 0.25,
+                    v.z + sz * size * 0.25,
+                    2 + 0.5 * roll(2),
+                    2 + 0.5 * roll(2),
+                    2.5,
+                    "cover"
+                )
+                v.cover = map.blocks[#map.blocks]
+            end
         end
         for j = 1, 10 do
+            local v = j <= 2 and first or sites[1 + (j - 3) % #sites]
             room.spawns[j] = {
-                x = x + ((j - 1) % 5 - 2) * 3.6 + (roll(9) - 4) * 0.16,
-                z = back + 2.0 + math.floor((j - 1) / 5) * 2.1 + roll(5) * 0.12,
-                kind = ({ 1, 2, 4 })[1 + (j + roll(3)) % 3],
+                x = v.x + (j % 2 == 1 and -1 or 1) * 1.35,
+                z = v.z - (j <= 2 and size * 0.26 or 0.5),
+                kind = ({ 1, 2, 4 })[1 + roll(3)],
             }
         end
         room.spawns[1].kind, room.spawns[2].kind, room.spawns[3].kind = 1, 2, 4
-        front = back
+        entry = finish
+    end
+    for _, v in ipairs(map.cells) do
+        for dir, delta in ipairs(directions) do
+            if not v.links[dir] then
+                local c, r = v.col + delta[1], v.row + delta[2]
+                local neighbor = c >= 1 and c <= 5 and map.tiles[(r - 1) * 5 + c]
+                if not neighbor or v.id < neighbor.id then
+                    local side = delta[1] ~= 0
+                    block(
+                        v.x + delta[1] * size / 2,
+                        v.z - delta[2] * size / 2,
+                        side and 0.42 or size,
+                        side and size or 0.42,
+                        2.4 + roll(3) * 0.5,
+                        "wall"
+                    )
+                end
+            end
+        end
     end
     run.layout = map
+    Tour.cached = map
     return map
 end
+local function tileAt(map, x, z)
+    local c = math.floor((x - map.x) / map.size + 3.5)
+    if c < 1 or c > 5 then
+        return nil
+    end
+    return map.tiles[math.floor((map.front - z) / map.size) * 5 + c]
+end
+-- Follow open links even when the last defender is around a blind corner.
+-- Each block of cover has room around all four sides. A defender may stop
+-- behind it within the same street tile, so guide the last few metres too.
+local function aroundCover(cell, x, z, tx, tz)
+    local b = cell.cover
+    if not b then
+        return tx, tz
+    end
+    local w, d = b.w / 2 + 0.25, b.d / 2 + 0.25
+    local function clear(x, z, tx, tz)
+        return not boxCross(x, z, tx, tz, b.x, b.z, w, d)
+    end
+    if clear(x, z, tx, tz) then
+        return tx, tz
+    end
+    local corners = {}
+    for _, sx in ipairs({ -1, 1 }) do
+        for _, sz in ipairs({ -1, 1 }) do
+            corners[#corners + 1] = { b.x + sx * (w + 0.18), b.z + sz * (d + 0.18) }
+        end
+    end
+    local best, px, pz = math.huge, tx, tz
+    for _, a in ipairs(corners) do
+        if clear(x, z, a[1], a[2]) then
+            for _, e in ipairs(corners) do
+                if (a[1] == e[1] or a[2] == e[2]) and clear(e[1], e[2], tx, tz) then
+                    local length = math.sqrt(dist(x, z, a[1], a[2]))
+                        + math.abs(a[1] - e[1])
+                        + math.abs(a[2] - e[2])
+                        + math.sqrt(dist(e[1], e[2], tx, tz))
+                    if length < best then
+                        best, px, pz = length, a[1], a[2]
+                    end
+                end
+            end
+        end
+    end
+    return px, pz
+end
+
+local function waypoint(map, x, z, tx, tz)
+    local from, to = tileAt(map, x, z), tileAt(map, tx, tz)
+    if not from or not to then
+        return tx, tz
+    end
+    if from == to then
+        return aroundCover(from, x, z, tx, tz)
+    end
+    local queue, prev = { from }, { [from.id] = from }
+    local index = 1
+    while queue[index] and not prev[to.id] do
+        local current = queue[index]
+        for dir = 1, 4 do
+            local id = current.links[dir]
+            if id and not prev[id] then
+                prev[id] = current
+                queue[#queue + 1] = map.tiles[id]
+            end
+        end
+        index = index + 1
+    end
+    local step = to
+    while prev[step.id] and prev[step.id] ~= from do
+        step = prev[step.id]
+    end
+    -- Align with the opening before turning; a diagonal can cut a solid corner.
+    if
+        step.row == from.row and math.abs(z - from.z) > 0.65
+        or step.col == from.col and math.abs(x - from.x) > 0.65
+    then
+        return aroundCover(from, x, z, from.x, from.z)
+    end
+    return aroundCover(from, x, z, step.x, step.z)
+end
 local function tourBlocked(run, x, z, tx, tz, pad, y, ty)
+    local minX, maxX = math.min(x, tx) - pad, math.max(x, tx) + pad
+    local minZ, maxZ = math.min(z, tz) - pad, math.max(z, tz) + pad
     for _, b in ipairs(layout(run).blocks) do
-        local hit, first, last = boxCross(x, z, tx, tz, b.x, b.z, b.w / 2 + pad, b.d / 2 + pad)
-        if hit and (not y or math.min(y + first * (ty - y), y + last * (ty - y)) <= b.h) then
-            return true
+        if
+            minX <= b.x + b.w / 2
+            and maxX >= b.x - b.w / 2
+            and minZ <= b.z + b.d / 2
+            and maxZ >= b.z - b.d / 2
+        then
+            local hit, first, last = boxCross(x, z, tx, tz, b.x, b.z, b.w / 2 + pad, b.d / 2 + pad)
+            if hit and (not y or math.min(y + first * (ty - y), y + last * (ty - y)) <= b.h) then
+                return true
+            end
         end
     end
     return false
 end
-function Tour.destination(run)
-    local room = layout(run).rooms[section(run)]
-    return room.gate + 1.45, room.back + 1.65, Tour.places[leg(run)][section(run)]
+function Tour.destination(run, observer)
+    local map = layout(run)
+    local room = map.rooms[section(run)]
+    local tx, tz = room.gate + 1.45, room.back + 1.65
+    if observer then
+        local _, a = remaining(run, observer)
+        if a then
+            tx, tz = a.x, a.z
+        end
+        tx, tz = waypoint(map, observer.x, observer.z, tx, tz)
+    end
+    return tx, tz, Tour.places[leg(run)][section(run)]
 end
 function Tour.move(run, x, z, dx, dz)
     local map = layout(run)
     local room = map.rooms[section(run)]
-    local nx = Hall.clamp(x + dx, map.x - 18, map.x + 18)
+    local nx = Hall.clamp(x + dx, map.x - 2.5 * map.size + 0.5, map.x + 2.5 * map.size - 0.5)
     if tourBlocked(run, x, z, nx, z, 0.25) then
         nx = x
     end
@@ -318,11 +544,15 @@ function Tour.arrive(run, p)
     local i = section(run)
     p.x = i == 1 and map.x or map.rooms[i - 1].gate
     p.z = map.rooms[i].front - 2
-    p.yaw = 0
+    p.yaw = map.rooms[i].heading
 end
 function Tour.act(run, p, r)
     if not run.seed then
-        run.seed = 1 + ((HostUTC or 0) + math.floor(run.clock * 1000) * 131 + run.id * 7919) % 2147483600
+        -- Keep the departure sequence outside the room: an empty room is
+        -- destroyed, and a recreated room can have the same id and clock.
+        Tour.lastSeed = Tour.lastSeed and Tour.lastSeed * 48271 % 2147483647
+            or 1 + ((HostUTC or 0) + math.floor(run.clock * 1000) * 131 + run.id * 7919) % 2147483600
+        run.seed = Tour.lastSeed
         run.progress = 1
     else
         local room = layout(run).rooms[section(run)]
@@ -1027,6 +1257,8 @@ function M.hint(run, p)
             .. Tour.places[leg(run)][section(run)]
             .. "  /  "
             .. goal
+            .. "  #"
+            .. run.seed
     end
     if run.progress == 1 and near(p, 1.6, 2.7, 4.7) then
         return hit .. "Use the World Tour sign for three random maps, or take the vent for Tinseltown."
@@ -1276,31 +1508,45 @@ local function dressTour(run)
     end
     local buildings = { "tour-sunset", "tour-relay", "tour-farm" }
     local horizon = { "tour-skyline", "tour-earthrise", "tour-borde" }
-    for i, room in ipairs(map.rooms) do
-        local mid = (room.back + room.front) / 2
-        local width = room.r - room.l
-        box((room.l + room.r) / 2, -0.19, mid, width, 0.38, room.front - room.back, colors[1])
-        for _, side in ipairs({ -1, 1 }) do
-            local edge = side == -1 and room.l or room.r
-            landmark(buildings[city], edge + side * 4.6, 0, room.back + 3.2, 1.25, -side * 48)
+    for _, cell in ipairs(map.cells) do
+        local span = map.size
+        box(cell.x, -0.19, cell.z, span, 0.38, span, colors[1])
+        if city == 2 and cell.id % 3 == 0 then
+            landmark("tour-craters", cell.x, 0, cell.z, 0.40, 0)
         end
-        if city == 2 then
-            landmark("tour-craters", map.x, 0, mid, 1, 0)
-        end
-        for j = 1, 5 do
-            local z = room.front - j * (room.front - room.back) / 6
-            if city == 1 then
-                box(map.x, 0.015, z, 0.17, 0.03, 1.7, colors[3])
-            elseif city == 2 then
-                for _, side in ipairs({ -1, 1 }) do
-                    box(map.x + side * 8.8, 0.04, z, 0.78, 0.08, 0.22, colors[3], 0.4)
+        for dir = 1, 4 do
+            if cell.links[dir] then
+                local dx, dz = directions[dir][1], -directions[dir][2]
+                local w = dx == 0 and 0.22 or span * 0.25
+                local d = dx == 0 and span * 0.25 or 0.22
+                if city == 3 then
+                    w = dx == 0 and 2.8 or span * 0.5
+                    d = dx == 0 and span * 0.5 or 2.8
                 end
-            else
-                box(map.x, -0.04, z, 4, 0.11, (room.front - room.back) / 6 + 0.02, colors[4])
+                box(
+                    cell.x + dx * span * 0.25,
+                    0.012,
+                    cell.z + dz * span * 0.25,
+                    w,
+                    0.024,
+                    d,
+                    city == 3 and colors[4] or colors[3]
+                )
             end
         end
+    end
+    for i, room in ipairs(map.rooms) do
+        local cell = room.exit
+        -- The landmark faces an open lane from the outside of the perimeter.
+        for _, v in ipairs(map.cells) do
+            if v.row == cell.row and math.abs(v.x - map.x) > math.abs(cell.x - map.x) then
+                cell = v
+            end
+        end
+        local side = cell.x >= map.x and 1 or -1
+        landmark(buildings[city], cell.x + side * (map.size / 2 + 4), 0, cell.z, 1.25, -side * 58)
         if city == 3 and i == 1 then
-            box(map.x, 0.04, room.back, 30, 0.085, 3.4, { 0.12, 0.44, 0.62 })
+            box(room.gate, 0.04, room.back, map.size, 0.085, 3.4, { 0.12, 0.44, 0.62 })
             for n = -4, 4 do
                 box(room.gate, 0.105, room.back + n * 0.42, 4.8, 0.13, 0.38, colors[4])
             end

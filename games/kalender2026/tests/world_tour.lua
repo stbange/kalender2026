@@ -8,20 +8,26 @@ local function walk(g, x, z)
     eng.input.inject("up", true)
 end
 local function clear(map, x, z, tx, tz)
-    local steps = math.max(1, math.ceil(math.sqrt((tx - x) ^ 2 + (tz - z) ^ 2) * 2))
-    for i = 0, steps do
-        for _, b in ipairs(map.blocks) do
-            if
-                math.abs(x + (tx - x) * i / steps - b.x) < b.w / 2 + 0.3
-                and math.abs(z + (tz - z) * i / steps - b.z) < b.d / 2 + 0.3
-            then
-                return false
+    for _, b in ipairs(map.blocks) do
+        local low, high = 0, 1
+        local function crosses(pos, delta, min, max)
+            if math.abs(delta) < 0.0001 then
+                return pos >= min and pos <= max
             end
+            local a, b = (min - pos) / delta, (max - pos) / delta
+            low, high = math.max(low, math.min(a, b)), math.min(high, math.max(a, b))
+            return low <= high
+        end
+        if
+            crosses(x, tx - x, b.x - b.w / 2 - 0.02, b.x + b.w / 2 + 0.02)
+            and crosses(z, tz - z, b.z - b.d / 2 - 0.02, b.z + b.d / 2 + 0.02)
+        then
+            return false
         end
     end
     return true
 end
-local route = 1
+
 function playtest_frame(f)
     local g = game.state
     eng.input.inject("fire", false)
@@ -47,10 +53,26 @@ function playtest_frame(f)
     local map = run.layout
     local phase = run.progress
     if last ~= phase then
-        last, stalled, route = phase, f, 1
+        last, stalled = phase, f
         visited[map.city] = true
     end
     if f - stalled > 7000 then
+        local nx, nz = MissionPacks[1].destination(run, p)
+        eng.log.info(string.format("waypoint %.2f %.2f phase %d", nx, nz, phase))
+        for _, a in ipairs(run.actors) do
+            if a.hp > 0 then
+                eng.log.info(
+                    string.format(
+                        "remaining kind %d hp %d at %.2f %.2f clear %s",
+                        a.kind,
+                        a.hp,
+                        a.x,
+                        a.z,
+                        tostring(clear(map, g.x, g.z, a.x, a.z))
+                    )
+                )
+            end
+        end
         error(
             "Stuck in sector "
                 .. phase
@@ -75,8 +97,10 @@ function playtest_frame(f)
     end
     local court = map.rooms[(phase - 1) % 3 + 1]
     local tx, tz = court.gate, court.back + 1.7
+    local alive = false
     for _, a in ipairs(run.actors) do
         if a.hp > 0 then
+            alive = true
             tx, tz = a.x, a.z
             if (tx - g.x) ^ 2 + (tz - g.z) ^ 2 < 31 ^ 2 and clear(map, g.x, g.z, tx, tz) then
                 host_weapon(3)
@@ -87,19 +111,12 @@ function playtest_frame(f)
             end
         end
     end
-    if (tx - g.x) ^ 2 + (tz - g.z) ^ 2 < 2.4 then
+    if not alive and (tx - g.x) ^ 2 + (tz - g.z) ^ 2 < 2.4 then
         eng.input.inject("interact", f % 2 == 0)
         return
     end
-    local index = (phase - 1) % 3 + 1
-    local entry = index == 1 and map.x or map.rooms[index - 1].gate
-    local points = { { entry, court.front - 3.2 }, { map.x, court.front - 3.2 }, { map.x, court.back + 3.3 } }
-    local dest = points[route]
-    if dest and (dest[1] - g.x) ^ 2 + (dest[2] - g.z) ^ 2 < 0.4 then
-        route = route + 1
-        dest = points[route]
-    end
-    walk(g, dest and dest[1] or tx, dest and dest[2] or tz)
+    local nx, nz = MissionPacks[1].destination(run, p)
+    walk(g, nx, nz)
 end
 function playtest_verify()
     eng.test.assert_true(

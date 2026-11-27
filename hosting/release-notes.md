@@ -1,8 +1,8 @@
-Door 1 now has a second route. Use the World Tour sign on the opening rooftop to play Los Angeles, Luna and Bettinghausen in order. The rooftop vent still leads to Last Launch from Tinseltown.
+World Tour now generates the streets you can walk. Each new departure carves turns, side streets, dead ends and possible loops through Los Angeles, Luna and Bettinghausen. The mission hint displays the shared seed. The rooftop vent opens the original Tinseltown route.
 
-A fresh tour generates three maps with nine firefights. Movie props, lunar landers and haystacks provide cover. Watch for aimed double shots, airborne fan volleys and charged heavy salvos. Listen for incoming fire and watch your hearts and armor. Losing your last heart returns you to the current sector.
+The navigation marker follows open passages to a remaining defender or the unlocked exit. Rejoining friends preserves their map. A fresh instance starts after the last player leaves Door 1.
 
-In a live room, the first route selection applies to the crew. Late arrivals share the map and checkpoint. Install the matching 0.8.0 Linux room service for the new mission catalog revision.
+Room hosts should install the matching 0.9.0 Linux service for catalog revision `tinseltown-streets-1`.
 
 [Play Kalender 2026](https://stbange.github.io/kalender2026/)
 
