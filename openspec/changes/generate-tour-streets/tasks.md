@@ -1,3 +1,0 @@
-- [x] Generate and render connected streets and place combatants on them.
-- [x] Route the objective marker through open passages and expose the seed.
-- [x] Test physical connectivity, layout diversity, shared seeds and mission completion locally.
